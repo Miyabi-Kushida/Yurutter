@@ -1,0 +1,61 @@
+<!doctype html>
+<html lang="ja">
+  <head>
+    <meta charset="UTF-8" />
+    <link rel="icon" type="image/svg+xml" href="/vite.svg" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Yurutter</title>
+
+    <!-- ✅ Tailwind 読み込み -->
+    <script src="https://cdn.tailwindcss.com"></script>
+
+    <!-- ✅ Google Fonts (Poppins) 読み込み -->
+    <link
+      href="https://fonts.googleapis.com/css2?family=Poppins:wght@500;600;700;800&display=swap"
+      rel="stylesheet"
+    />
+
+    <!-- ✅ Tailwindカスタム設定 -->
+    <script>
+      tailwind.config = {
+        theme: {
+          extend: {
+            fontFamily: {
+              sans: ["Poppins", "-apple-system", "BlinkMacSystemFont", "Helvetica Neue", "Arial", "sans-serif"],
+            },
+            colors: {
+              brand: {
+                DEFAULT: "#1677ff",
+                dark: "#125ed1",
+              },
+            },
+            boxShadow: {
+              card: "0 6px 20px rgba(0,0,0,0.08)",
+            },
+            borderRadius: {
+              card: "14px",
+            },
+            maxWidth: {
+              iphone14pro: "393px",
+            },
+          },
+        },
+      };
+    </script>
+
+    <!-- ✅ 背景色を整える -->
+    <style>
+      body {
+        font-family: "Poppins", -apple-system, BlinkMacSystemFont, "Helvetica Neue", Arial, sans-serif;
+        background-color: #f3f4f6;
+        -webkit-font-smoothing: antialiased;
+      }
+    </style>
+  </head>
+
+  <body>
+    <div id="root"></div>
+    <div id="modal-root"></div>
+    <script type="module" src="/src/main.jsx"></script>
+  </body>
+</html>

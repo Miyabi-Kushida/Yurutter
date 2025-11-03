@@ -1,0 +1,311 @@
+[
+  {
+    "id": "p1",
+    "user": "オンディーヌ",
+    "category": "バカ系",
+    "text": "なんで月曜って憂鬱なん？",
+    "likes": 10,
+    "comments": 2,
+    "laughs": 1,
+    "createdAt": "2024-01-15T09:30:00Z",
+    "replies": [
+      {
+        "id": "r1",
+        "user": "失恋勇者99",
+        "text": "そりゃ休み明けだからやろwww",
+        "likes": 10,
+        "laughs": 1,
+        "comments": 2,
+        "createdAt": "2024-01-15T10:00:00Z",
+        "replies": [
+          {
+            "id": "rr1",
+            "user": "月曜嫌い太郎",
+            "text": "確かに！",
+            "likes": 0,
+            "laughs": 0,
+            "comments": 0,
+            "createdAt": "2024-01-15T10:30:00Z",
+            "replies": []
+          },
+          {
+            "id": "rr2",
+            "user": "週末愛好家",
+            "text": "土日が短すぎる",
+            "likes": 0,
+            "laughs": 0,
+            "comments": 0,
+            "createdAt": "2024-01-15T11:00:00Z",
+            "replies": []
+          }
+        ]
+      },
+      {
+        "id": "r2",
+        "user": "青いカレーの神",
+        "text": "会社行きたくないからに決まってる！",
+        "likes": 10,
+        "laughs": 1,
+        "comments": 1,
+        "createdAt": "2024-01-15T10:15:00Z",
+        "replies": [
+          {
+            "id": "rr3",
+            "user": "働き方改革",
+            "text": "リモートワーク推奨！",
+            "likes": 0,
+            "laughs": 0,
+            "comments": 0,
+            "createdAt": "2024-01-15T10:45:00Z",
+            "replies": []
+          }
+        ]
+      }
+    ]
+  },
+  {
+    "id": "p2",
+    "user": "絞首台",
+    "category": "日常系",
+    "text": "元カノからLINE既読無視されてるんだけど助けて",
+    "likes": 10,
+    "comments": 3,
+    "laughs": 1,
+    "createdAt": "2024-01-15T14:20:00Z",
+    "replies": [
+      {
+        "id": "r3",
+        "user": "恋愛コンサルタント",
+        "text": "諦めるのが一番だと思うよ...",
+        "likes": 8,
+        "laughs": 2,
+        "comments": 1,
+        "createdAt": "2024-01-15T14:20:00Z",
+        "replies": [
+          {
+            "id": "rr4",
+            "user": "諦めの美学",
+            "text": "そうだね",
+            "likes": 0,
+            "laughs": 0,
+            "comments": 0,
+            "createdAt": "2024-01-15T14:45:00Z",
+            "replies": []
+          }
+        ]
+      },
+      {
+        "id": "r4",
+        "user": "復活の魔術師",
+        "text": "まだ諦めるには早い！頑張れ！",
+        "likes": 15,
+        "laughs": 3,
+        "comments": 0,
+        "createdAt": "2024-01-15T14:30:00Z",
+        "replies": []
+      },
+      {
+        "id": "r5",
+        "user": "現実主義者",
+        "text": "既読無視されたら終わりだろ",
+        "likes": 12,
+        "laughs": 1,
+        "comments": 4,
+        "createdAt": "2024-01-15T15:00:00Z",
+        "replies": [
+          {
+            "id": "rr5",
+            "user": "恋愛コンサルタント",
+            "text": "そうでもないよ",
+            "likes": 0,
+            "laughs": 0,
+            "comments": 0,
+            "createdAt": "2024-01-15T15:30:00Z",
+            "replies": []
+          },
+          {
+            "id": "rr6",
+            "user": "希望の光",
+            "text": "諦めないで！",
+            "likes": 0,
+            "laughs": 0,
+            "comments": 0,
+            "createdAt": "2024-01-15T16:00:00Z",
+            "replies": []
+          },
+          {
+            "id": "rr7",
+            "user": "現実チェッカー",
+            "text": "でも現実は厳しい",
+            "likes": 0,
+            "laughs": 0,
+            "comments": 0,
+            "createdAt": "2024-01-15T16:30:00Z",
+            "replies": []
+          },
+          {
+            "id": "rr8",
+            "user": "最後の希望",
+            "text": "まだチャンスはある",
+            "likes": 0,
+            "laughs": 0,
+            "comments": 0,
+            "createdAt": "2024-01-15T17:00:00Z",
+            "replies": []
+          }
+        ]
+      }
+    ]
+  },
+  {
+    "id": "p3",
+    "user": "スカルボ",
+    "category": "バカ系",
+    "text": "冷蔵庫のプリンを眺めてる時間が一番幸せ",
+    "image": "/images/pudding.jpg",
+    "likes": 10,
+    "comments": 3,
+    "laughs": 1,
+    "createdAt": "2024-01-16T08:15:00Z",
+    "replies": [
+      {
+        "id": "r6",
+        "user": "甘党マスター",
+        "text": "プリン最高だよね！私も毎日見てる",
+        "likes": 7,
+        "laughs": 0,
+        "comments": 2,
+        "createdAt": "2024-01-16T08:30:00Z",
+        "replies": []
+      },
+      {
+        "id": "r7",
+        "user": "冷蔵庫の住人",
+        "text": "食べる前に観賞するのが一番美味しい",
+        "likes": 9,
+        "laughs": 1,
+        "comments": 0,
+        "createdAt": "2024-01-16T09:00:00Z",
+        "replies": []
+      }
+    ]
+  },
+  {
+    "id": "p4",
+    "user": "恋愛マスター",
+    "category": "恋愛系",
+    "text": "告白するタイミングってどうやって決めるの？",
+    "likes": 25,
+    "comments": 3,
+    "laughs": 3,
+    "createdAt": "2024-01-16T16:45:00Z",
+    "replies": [
+      {
+        "id": "r8",
+        "user": "恋愛のプロ",
+        "text": "相手の反応を見て判断するのが一番！",
+        "likes": 18,
+        "laughs": 4,
+        "comments": 6,
+        "createdAt": "2024-01-16T17:00:00Z",
+        "replies": []
+      },
+      {
+        "id": "r9",
+        "user": "勇気の戦士",
+        "text": "迷ったら今すぐがベストタイミング！",
+        "likes": 22,
+        "comments": 3,
+        "createdAt": "2024-01-16T17:30:00Z",
+        "replies": []
+      },
+      {
+        "id": "r10",
+        "user": "慎重派",
+        "text": "相手との関係性を深めてからが安全",
+        "likes": 14,
+        "laughs": 1,
+        "comments": 8,
+        "createdAt": "2024-01-16T18:00:00Z",
+        "replies": []
+      }
+    ]
+  },
+  {
+    "id": "p5",
+    "user": "社会人3年目",
+    "category": "社会人あるある",
+    "text": "会議で「何か質問ありますか？」って聞かれるのが一番怖い",
+    "likes": 45,
+    "comments": 4,
+    "laughs": 8,
+    "createdAt": "2024-01-17T11:30:00Z",
+    "replies": [
+      {
+        "id": "r11",
+        "user": "会議の達人",
+        "text": "「特にありません」が最強の回答",
+        "likes": 32,
+        "laughs": 12,
+        "comments": 7,
+        "createdAt": "2024-01-17T11:45:00Z",
+        "replies": []
+      },
+      {
+        "id": "r12",
+        "user": "質問マン",
+        "text": "逆に質問しまくって場を支配しよう",
+        "likes": 28,
+        "laughs": 5,
+        "comments": 11,
+        "createdAt": "2024-01-17T12:00:00Z",
+        "replies": []
+      },
+      {
+        "id": "r13",
+        "user": "沈黙の騎士",
+        "text": "無言で首を振るのが一番安全",
+        "likes": 35,
+        "laughs": 8,
+        "comments": 4,
+        "createdAt": "2024-01-17T12:30:00Z",
+        "replies": []
+      }
+    ]
+  },
+  {
+    "id": "p6",
+    "user": "バカッター初心者",
+    "category": "日常系",
+    "text": "今日からバカッター始めました！よろしくお願いします！",
+    "likes": 8,
+    "comments": 3,
+    "laughs": 0,
+    "createdAt": "2024-01-17T19:00:00Z",
+    "replies": [
+      {
+        "id": "r14",
+        "user": "バカッターの先輩",
+        "text": "ようこそ！楽しんでいってね！",
+        "likes": 5,
+        "laughs": 1,
+        "comments": 0,
+        "createdAt": "2024-01-17T19:15:00Z",
+        "replies": []
+      },
+      {
+        "id": "r15",
+        "user": "歓迎委員会",
+        "text": "初投稿おめでとう！頑張って！",
+        "likes": 7,
+        "laughs": 0,
+        "comments": 2,
+        "createdAt": "2024-01-17T19:30:00Z",
+        "replies": []
+      }
+    ]
+  }
+]
+
+
+

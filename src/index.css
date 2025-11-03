@@ -1,0 +1,68 @@
+main {
+  background-color: #ffffff;
+}
+
+html, body {
+  margin: 0;
+  padding: 0;
+  width: 100%;
+  height: 100%;
+  overflow-x: hidden;   /* 横スクロール防止 */
+}
+
+#root {
+  min-height: 100vh;     /* 全画面をカバー */
+  display: flex;
+  flex-direction: column;
+}
+
+/* ページ全体ラッパー */
+.page-container {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+
+  /* ヘッダーとフッターの分だけ余白を確保 */
+  padding-top: 3.5rem;   /* ヘッダー高さ (h-14 = 56px) */
+  padding-bottom: 6.5rem;/* フッター高さ (h-16 = 64px + 余裕) */
+
+  box-sizing: border-box;
+  background-color: #ffffff; /* ← 修正：カテゴリバー・投稿一覧の背景を白に */
+}
+
+.page-container main {
+  flex: 1;
+  width: 100%; /* ← これを追加 */
+}
+
+body {
+  color: #111827;
+  font-family: -apple-system, BlinkMacSystemFont, "Helvetica Neue", Arial,
+    "Hiragino Sans", "Yu Gothic UI", "YuGothic", "Noto Sans JP", sans-serif;
+  -webkit-font-smoothing: antialiased;
+}
+
+/* カードの骨組み色 */
+.skeleton {
+  background-image: linear-gradient(
+    90deg,
+    rgba(0, 0, 0, 0.06),
+    rgba(0, 0, 0, 0.08),
+    rgba(0, 0, 0, 0.06)
+  );
+  background-size: 200% 100%;
+  animation: shine 1.2s linear infinite;
+}
+
+@keyframes shine {
+  from { background-position: 200% 0; }
+  to   { background-position: -200% 0; }
+}
+
+/* === 🔗 URLカード用スタイル === */
+.line-clamp-2 {
+  display: -webkit-box;
+  -webkit-line-clamp: 2;
+  -webkit-box-orient: vertical;
+  overflow: hidden;
+}
