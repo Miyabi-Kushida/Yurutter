@@ -12,17 +12,17 @@ export default function AuthModal() {
       <div className="bg-white rounded-lg p-6 w-80 text-center">
         <h2 className="text-lg font-bold mb-2">アカウントが必要です</h2>
         <p className="text-sm text-gray-600 mb-4">
-          この機能を利用するにはアカウントを作成してください。
+          この機能を利用するには、ログイン/新規登録してください。
         </p>
 
         <button
           onClick={() => {
             closeAuthModal();
-            navigate("/account/create");
+            navigate("/login");
           }}
           className="w-full bg-brand text-white py-2 rounded-lg mb-2"
         >
-          アカウント作成へ
+          ログイン/新規登録
         </button>
 
         <button

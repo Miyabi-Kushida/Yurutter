@@ -1,6 +1,8 @@
-import { useNavigate } from 'react-router-dom';
-import { usePosts } from '../context/PostsContext';
+// src/components/Stats.jsx
+import { useEffect, useState } from "react";
+import { useNavigate } from "react-router-dom";
 import { useAuth } from "../context/AuthContext";
+import { usePosts } from "../context/PostsContext";
 import { hasAccount } from "../utils/authGuard";
 import { IconLike, IconLaugh, IconComment, IconShare } from "./Icons";
 
@@ -9,34 +11,50 @@ export default function Stats({
   laughs = [],
   comments,
   postId,
-  answerId,      // ← ✅ これを追加
+  answerId,
   replies = 0,
   isReply = false,
   onReplyToggle,
 }) {
   const navigate = useNavigate();
-  const { toggleReaction } = usePosts();
   const { openAuthModal } = useAuth();
-
+  const { toggleReaction, toggleCommentReaction } = usePosts();
   const account = JSON.parse(localStorage.getItem("bakatter-account") || "{}");
   const userId = account.id;
 
-  // 現ユーザーが押してるか判定（旧データ対策付き）
-  const userLiked = Array.isArray(likes) && likes.includes(userId);
-  const userLaughed = Array.isArray(laughs) && laughs.includes(userId);
+  // 現ユーザーが押してるか判定
+  const likeArrayFromProps = Array.isArray(likes) ? likes : [];
+  const laughArrayFromProps = Array.isArray(laughs) ? laughs : [];
 
-  // 👍 いいねトグル
-  const handleLike = (e) => {
-    e.stopPropagation();
-    if (!hasAccount(openAuthModal)) return;
-    toggleReaction(answerId || postId, userId, "likes");
-  };
+  const [localLikes, setLocalLikes] = useState(likeArrayFromProps);
+  const [localLaughs, setLocalLaughs] = useState(laughArrayFromProps);
 
-  // 🤣 笑いトグル
-  const handleLaugh = (e) => {
-    e.stopPropagation();
+  useEffect(() => {
+    setLocalLikes(likeArrayFromProps);
+  }, [likeArrayFromProps]);
+
+  useEffect(() => {
+    setLocalLaughs(laughArrayFromProps);
+  }, [laughArrayFromProps]);
+
+  const userLiked = localLikes.includes(userId);
+  const userLaughed = localLaughs.includes(userId);
+
+  // ✅ Supabase更新関数（楽観的UI対応）
+  const handleToggleReaction = async (type) => {
     if (!hasAccount(openAuthModal)) return;
-    toggleReaction(answerId || postId, userId, "laughs");
+
+    const updatedArray = isReply && answerId
+      ? await toggleCommentReaction(postId, answerId, userId, type)
+      : await toggleReaction(postId, userId, type);
+
+    if (!updatedArray) return;
+
+    if (type === "likes") {
+      setLocalLikes(updatedArray);
+    } else {
+      setLocalLaughs(updatedArray);
+    }
   };
 
   // 💬 コメント or 返信
@@ -75,24 +93,30 @@ export default function Stats({
     <div className="mt-2 flex items-center gap-4 text-[13px] text-gray-600">
       {/* 👍いいね */}
       <button
-        onClick={handleLike}
+        onClick={(e) => {
+          e.stopPropagation();
+          handleToggleReaction("likes");
+        }}
         className={`flex items-center gap-1 transition ${
           userLiked ? "text-amber-500" : "hover:text-amber-400"
         }`}
       >
         <IconLike width={18} height={18} />
-        <span>{likes?.length || 0}</span>
+        <span>{localLikes.length}</span>
       </button>
 
       {/* 🤣笑い */}
       <button
-        onClick={handleLaugh}
+        onClick={(e) => {
+          e.stopPropagation();
+          handleToggleReaction("laughs");
+        }}
         className={`flex items-center gap-1 transition ${
           userLaughed ? "text-yellow-500" : "hover:text-yellow-400"
         }`}
       >
         <IconLaugh width={18} height={18} />
-        <span>{laughs?.length || 0}</span>
+        <span>{localLaughs.length}</span>
       </button>
 
       {/* 💬コメント or 返信 */}

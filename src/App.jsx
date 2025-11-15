@@ -12,8 +12,9 @@ import AuthModal from "./components/AuthModal";
 import SearchResults from "./components/SearchResults";
 import ScrollToTop from "./components/ScrollToTop";
 import AccountCreate from "./components/AccountCreate";
+import Login from "./components/Login"; // ✅ ← 追加！
 
-// ✅ ログイン済みなら /account/create に入れないように制御
+// ✅ ログイン済みなら /account/create や /login に入れないように制御
 function ProtectedRoute({ children }) {
   const savedAccount = JSON.parse(localStorage.getItem("bakatter-account") || "null");
   if (savedAccount) {
@@ -41,12 +42,22 @@ export default function App() {
             <Route path="/search" element={<SearchResults />} />
           </Route>
 
-          {/* ✅ アカウント作成ページは未ログイン時のみアクセス可 */}
+          {/* ✅ アカウント作成ページ */}
           <Route
             path="/account/create"
             element={
               <ProtectedRoute>
                 <AccountCreate />
+              </ProtectedRoute>
+            }
+          />
+
+          {/* ✅ ログインページ */}
+          <Route
+            path="/login"
+            element={
+              <ProtectedRoute>
+                <Login />
               </ProtectedRoute>
             }
           />

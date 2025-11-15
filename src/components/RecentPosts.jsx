@@ -169,7 +169,7 @@ export default function RecentPosts() {
                 />
               ) : (
                 <div className="w-12 h-12 bg-white rounded-md flex items-center justify-center text-gray-400 text-sm border border-[#DFE0E1]">
-                  📝
+                  💬
                 </div>
               )}
 

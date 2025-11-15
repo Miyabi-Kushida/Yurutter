@@ -3,6 +3,7 @@ import { useState, useRef, useEffect } from "react";
 import { useNavigate } from "react-router-dom";
 import { useAuth } from "../context/AuthContext";
 import { usePosts } from "../context/PostsContext";
+import { supabase } from "../utils/supabaseClient";
 import Stats from "./Stats";
 import ReportButton from "./ReportButton";
 import ImageModal from "./ImageModal";
@@ -19,8 +20,11 @@ export default function PostCard({ post }) {
   const [showImageModal, setShowImageModal] = useState(false);
   const [modalImageIndex, setModalImageIndex] = useState(0);
   const [menuOpen, setMenuOpen] = useState(false);
-  const menuRef = useRef(null);
+  const [likes, setLikes] = useState(post.likes || []);
+  const [laughs, setLaughs] = useState(post.laughs || []);
+  const [updating, setUpdating] = useState(false);
 
+  const menuRef = useRef(null);
   const savedAccount = JSON.parse(localStorage.getItem("bakatter-account") || "{}");
   const isOwnPost = String(savedAccount.id) === String(post.userId);
 
@@ -57,19 +61,15 @@ export default function PostCard({ post }) {
     navigate(`/post/${post.id}`);
   };
 
-  // 🧭 プロフィールクリック（モーダル対応版）
+  // 🧭 プロフィールクリック
   const handleProfileClick = (e) => {
     e.stopPropagation();
-    const savedAccount = JSON.parse(localStorage.getItem("bakatter-account") || "{}");
-
-    // ✅ アカウント未作成ならモーダル表示
-    if (!savedAccount.id) {
+    const saved = JSON.parse(localStorage.getItem("bakatter-account") || "{}");
+    if (!saved.id) {
       openAuthModal();
       return;
     }
-
-    // ✅ アカウント作成済みならプロフィールへ遷移
-    if (String(savedAccount.id) === String(post.userId)) {
+    if (String(saved.id) === String(post.userId)) {
       navigate("/profile");
     } else {
       navigate(`/profile/${post.userId}`);
@@ -100,8 +100,47 @@ export default function PostCard({ post }) {
     Array.isArray(post.images) && post.images.length > 0
       ? post.images
       : post.image
-        ? [post.image]
-        : [];
+      ? [post.image]
+      : [];
+
+  // ✅ Supabaseリアクション更新
+  const handleToggleReaction = async (type) => {
+    if (!savedAccount.id) {
+      openAuthModal();
+      return;
+    }
+    if (updating) return;
+    setUpdating(true);
+
+    try {
+      const current = type === "likes" ? likes : laughs;
+      const hasReacted = current.includes(savedAccount.id);
+      const updated = hasReacted
+        ? current.filter((id) => id !== savedAccount.id)
+        : [...current, savedAccount.id];
+
+      if (type === "likes") setLikes(updated);
+      else setLaughs(updated);
+
+      const { error } = await supabase
+        .from("posts")
+        .update({ [type]: updated })
+        .eq("id", post.id);
+
+      if (error) {
+        console.error("リアクション更新エラー:", error);
+        alert("通信エラーが発生しました。");
+      }
+    } catch (err) {
+      console.error("リアクション処理中エラー:", err);
+    } finally {
+      setUpdating(false);
+    }
+  };
+
+  // 🔗 URL抽出と本文整形
+  const urls = extractURLs(post.text || "");
+  const textWithoutURLs = removeURLsFromText(post.text || "");
 
   return (
     <article
@@ -111,7 +150,6 @@ export default function PostCard({ post }) {
       {/* --- ヘッダー --- */}
       <header className="flex items-center justify-between mb-2 px-4 sm:px-4">
         <div className="flex items-center gap-3">
-          {/* 🧩 アイコン表示 */}
           <div
             onClick={handleProfileClick}
             className="cursor-pointer hover:opacity-80 transition"
@@ -119,9 +157,6 @@ export default function PostCard({ post }) {
             {postUser.emoji?.startsWith("/icons/") ? (
               <img
                 src={postUser.emoji}
-                onError={(e) =>
-                  (e.target.src = postUser.emoji.replace(".png", ".jpg"))
-                }
                 alt="ユーザーアイコン"
                 className="w-9 h-9 rounded-full object-cover border border-gray-200"
               />
@@ -130,7 +165,6 @@ export default function PostCard({ post }) {
             )}
           </div>
 
-          {/* 🧑 ユーザー名・カテゴリ */}
           <div
             onClick={handleProfileClick}
             className="leading-tight cursor-pointer hover:underline decoration-gray-400"
@@ -150,7 +184,7 @@ export default function PostCard({ post }) {
           </div>
         </div>
 
-        {/* 🧩 Reddit風メニュー */}
+        {/* メニュー */}
         <div ref={menuRef} onClick={(e) => e.stopPropagation()} className="relative">
           <button
             className="p-2 rounded-full hover:bg-gray-100"
@@ -184,32 +218,30 @@ export default function PostCard({ post }) {
         </div>
       </header>
 
-      {/* --- 本文 --- */}
-      {(() => {
-        const urls = extractURLs(post.text || "");
-        const textWithoutURLs = removeURLsFromText(post.text || "");
+      {/* --- 本文とURL --- */}
+      {textWithoutURLs && (
+        <p className="px-4 text-[15px] text-gray-800 leading-relaxed whitespace-pre-wrap mb-3">
+          {textWithoutURLs}
+        </p>
+      )}
 
-        return (
-          <>
-            {textWithoutURLs && (
-              <p className="px-4 sm:px-4 text-[15px] text-gray-800 leading-relaxed whitespace-pre-wrap mb-3">
-                {textWithoutURLs}
-              </p>
-            )}
+      {urls.length > 0 && (
+        <div className="px-4 mb-3">
+          {/* 最初のURLをカード化 */}
+          <div className="mb-2">
+            <URLCard url={urls[0]} />
+          </div>
 
-            {/* URLカード */}
-            {urls.length > 0 && (
-              <div className="px-4 sm:px-4 mb-3 overflow-hidden">
-                {urls.map((url, index) => (
-                  <div key={index} className="mb-2 w-full">
-                    <URLCard url={url} />
-                  </div>
-                ))}
-              </div>
-            )}
-          </>
-        );
-      })()}
+          {/* 2つ目以降はテキストリンク表示 */}
+          {urls.slice(1).map((url, i) => (
+            <div key={i} className="text-sm text-blue-500 hover:underline break-all">
+              <a href={url} target="_blank" rel="noopener noreferrer">
+                {url}
+              </a>
+            </div>
+          ))}
+        </div>
+      )}
 
       {/* --- 画像 --- */}
       {images.length > 0 && (
@@ -221,14 +253,17 @@ export default function PostCard({ post }) {
         </div>
       )}
 
-      {/* --- ステータス --- */}
+      {/* --- リアクション --- */}
       <footer className="flex justify-between items-center mt-2 px-4 sm:px-4 text-gray-500 text-sm">
         <Stats
-          likes={post.likes}
-          laughs={post.laughs}
+          likes={likes}
+          laughs={laughs}
           comments={post.comments}
           postId={post.id}
+          onLike={() => handleToggleReaction("likes")}
+          onLaugh={() => handleToggleReaction("laughs")}
           replies={post.replies?.length || 0}
+          userId={savedAccount.id}
         />
       </footer>
 

@@ -1,5 +1,5 @@
-
-import { useState, useEffect } from "react";
+// src/components/PostDetail.jsx
+import { useState, useEffect, useMemo } from "react";
 import { useParams, useNavigate } from "react-router-dom";
 import { usePosts } from "../context/PostsContext";
 import Stats from "./Stats";
@@ -20,6 +20,8 @@ export default function PostDetail() {
   const { postId } = useParams();
   const navigate = useNavigate();
   const { posts, addNestedComment, deletePost } = usePosts();
+
+  // ✅ Hooksはすべてトップレベルに固定
   const [newComment, setNewComment] = useState("");
   const [images, setImages] = useState([]);
   const [showAuthModal, setShowAuthModal] = useState(false);
@@ -28,67 +30,67 @@ export default function PostDetail() {
   const [currentImages, setCurrentImages] = useState([]);
   const [showMenu, setShowMenu] = useState(false);
 
-  const savedAccount = JSON.parse(localStorage.getItem("bakatter-account") || "{}");
+  // ✅ ローカルストレージは毎回パース（undefined対策）
+  const savedAccount = useMemo(
+    () => JSON.parse(localStorage.getItem("bakatter-account") || "{}"),
+    []
+  );
 
+  // ✅ ページ遷移時スクロールリセット
   useEffect(() => {
     window.scrollTo({ top: 0, behavior: "instant" });
   }, [postId]);
 
-  const post = posts.find((p) => String(p.id) === String(postId));
-  if (!post)
-    return (
-      <div className="flex min-h-screen bg-white">
-        <div className="flex-1 w-full px-4 lg:px-8">
-          <Header title="投稿詳細" showBack onBack={() => navigate(-1)} />
-          <main className="pt-4 pb-14">
-            <LayoutContainer>
-              <div className="py-12 text-center">
-                <p className="text-gray-500 mb-6">投稿が見つかりません</p>
-                <button
-                  onClick={() => navigate("/")}
-                  className="px-4 py-2 bg-brand text-white rounded-lg"
-                >
-                  ホームに戻る
-                </button>
-              </div>
-            </LayoutContainer>
-          </main>
-        </div>
-      </div>
+  // ✅ post取得を安定化（undefined対策＋useMemoでパフォーマンス改善）
+  const post = useMemo(
+    () => posts.find((p) => String(p.id) === String(postId)),
+    [posts, postId]
+  );
+
+  // ✅ コメント送信処理
+  const handleSubmitComment = async (e) => {
+    e.preventDefault();
+    if (!savedAccount?.id) {
+      setShowAuthModal(true);
+      return;
+    }
+    if (!newComment.trim() && images.length === 0) return;
+
+    const uploadedUrls = await Promise.all(
+      images.map(async (file) => {
+        const formData = new FormData();
+        formData.append("file", file);
+        formData.append("upload_preset", "unsigned_upload");
+        const res = await fetch("https://api.cloudinary.com/v1_1/dlbr3gemb/image/upload", {
+          method: "POST",
+          body: formData,
+        });
+        const data = await res.json();
+        return data.secure_url;
+      })
     );
 
-  const isMyPost = post.userId && savedAccount.id && post.userId === savedAccount.id;
-  const displayUsername = isMyPost
-    ? savedAccount.username || post.username
-    : post.username;
-  const displayEmoji = isMyPost ? savedAccount.emoji || post.emoji : post.emoji;
+    const newReply = {
+      id: `c${Date.now()}_${Math.random().toString(36).slice(2, 8)}`,
+      postId,
+      text: newComment.trim(),
+      images: uploadedUrls,
+      emoji: savedAccount?.emoji || "👤",
+      username: savedAccount?.username || "名無し",
+      userId: savedAccount?.id,
+      createdAt: new Date().toISOString(),
+      likes: [],
+      laughs: [],
+      replies: [],
+    };
 
-  const postImages = Array.isArray(post.images)
-    ? post.images
-    : post.image
-      ? [post.image]
-      : [];
-
-  const handleImageClick = (index, arr) => {
-    setModalImageIndex(index);
-    setCurrentImages(arr);
-    setShowImageModal(true);
+    // 🔥 ここでawaitを追加
+    await addNestedComment(postId, null, newReply);
+    setNewComment("");
+    setImages([]);
   };
 
-  const handleBack = () => navigate("/", { replace: true });
-
-  const handleImageChange = (e) => {
-    const file = e.target.files[0];
-    if (file) setImages([file]);
-  };
-
-  const removeImage = () => setImages([]);
-
-  // 🧩 URL抽出処理
-  const urls = extractURLs(post.text || "");
-  const textWithoutURLs = removeURLsFromText(post.text || "");
-
-  // ✅ コメント返信
+  // ✅ コメント返信処理
   const handleReply = async (parentId, replyData) => {
     const { text, image } = replyData;
     if (!savedAccount?.id) {
@@ -102,10 +104,10 @@ export default function PostDetail() {
       formData.append("file", image);
       formData.append("upload_preset", "unsigned_upload");
       try {
-        const res = await fetch(
-          "https://api.cloudinary.com/v1_1/dlbr3gemb/image/upload",
-          { method: "POST", body: formData }
-        );
+        const res = await fetch("https://api.cloudinary.com/v1_1/dlbr3gemb/image/upload", {
+          method: "POST",
+          body: formData,
+        });
         const data = await res.json();
         imageUrl = data.secure_url;
       } catch (err) {
@@ -130,66 +132,78 @@ export default function PostDetail() {
     addNestedComment(postId, parentId, newComment);
   };
 
-  // ✅ 投稿へのコメント
-  const handleSubmitComment = async (e) => {
-    e.preventDefault();
-    if (!savedAccount?.id) {
-      setShowAuthModal(true);
-      return;
-    }
-    if (!newComment.trim() && images.length === 0) return;
-
-    const uploadedUrls = await Promise.all(
-      images.map(async (file) => {
-        const formData = new FormData();
-        formData.append("file", file);
-        formData.append("upload_preset", "unsigned_upload");
-        const res = await fetch(
-          "https://api.cloudinary.com/v1_1/dlbr3gemb/image/upload",
-          { method: "POST", body: formData }
-        );
-        const data = await res.json();
-        return data.secure_url;
-      })
-    );
-
-    const newReply = {
-      id: `c${Date.now()}_${Math.random().toString(36).slice(2, 8)}`,
-      postId,
-      text: newComment.trim(),
-      images: uploadedUrls,
-      emoji: savedAccount?.emoji || "👤",
-      username: savedAccount?.username || "名無し",
-      userId: savedAccount?.id,
-      createdAt: new Date().toISOString(),
-      likes: [],
-      laughs: [],
-      replies: [],
-    };
-
-    addNestedComment(postId, null, newReply);
-    setNewComment("");
-    setImages([]);
-  };
-
-  // ✅ 履歴保存
+  // ✅ 履歴保存（post が取得できるまで待機）
   useEffect(() => {
-    if (post) {
-      const stored = JSON.parse(localStorage.getItem("bakatter-recent") || "[]");
-      const updated = [
-        {
-          id: post.id,
-          title: post.text?.slice(0, 40) || "（無題）",
-          image: post.image || post.images?.[0] || null,
-          category: post.category || "総合",
-          user: post.username || "名無し",
-          createdAt: post.createdAt,
-        },
-        ...stored.filter((p) => p.id !== post.id),
-      ].slice(0, 10);
-      localStorage.setItem("bakatter-recent", JSON.stringify(updated));
-    }
+    if (!post) return;
+
+    const stored = JSON.parse(localStorage.getItem("bakatter-recent") || "[]");
+    const updated = [
+      {
+        id: post.id,
+        text: post.text || "", // ← これを追加
+        title: post.text?.slice(0, 40) || "（無題）",
+        image: post.image || post.images?.[0] || null,
+        category: post.category || "総合",
+        user: post.username || "名無し",
+        createdAt: post.createdAt,
+      },
+      ...stored.filter((p) => p.id !== post.id),
+    ].slice(0, 10);
+    localStorage.setItem("bakatter-recent", JSON.stringify(updated));
   }, [post]);
+
+  // ✅ postが未取得時でもhooks順序を崩さず安全にreturn
+  if (!post) {
+    return (
+      <div className="flex min-h-screen bg-white">
+        <div className="flex-1 w-full px-4 lg:px-8">
+          <Header title="投稿詳細" showBack onBack={() => navigate(-1)} />
+          <main className="pt-4 pb-14">
+            <LayoutContainer>
+              <div className="py-12 text-center">
+                <p className="text-gray-500 mb-6">投稿が見つかりません</p>
+                <button
+                  onClick={() => navigate("/")}
+                  className="px-4 py-2 bg-brand text-white rounded-lg"
+                >
+                  ホームに戻る
+                </button>
+              </div>
+            </LayoutContainer>
+          </main>
+        </div>
+      </div>
+    );
+  }
+
+  // ✅ 表示用データ
+  const isMyPost = post.userId && savedAccount.id && post.userId === savedAccount.id;
+  const displayUsername = isMyPost
+    ? savedAccount.username || post.username
+    : post.username;
+  const displayEmoji = isMyPost ? savedAccount.emoji || post.emoji : post.emoji;
+
+  const postImages = Array.isArray(post.images)
+    ? post.images
+    : post.image
+      ? [post.image]
+      : [];
+
+  const urls = extractURLs(post.text || "");
+  const textWithoutURLs = removeURLsFromText(post.text || "");
+
+  // ✅ イベントハンドラ
+  const handleBack = () => navigate("/", { replace: true });
+  const handleImageChange = (e) => {
+    const file = e.target.files[0];
+    if (file) setImages([file]);
+  };
+  const removeImage = () => setImages([]);
+  const handleImageClick = (index, arr) => {
+    setModalImageIndex(index);
+    setCurrentImages(arr);
+    setShowImageModal(true);
+  };
 
   return (
     <div className="flex min-h-screen bg-white">
@@ -203,7 +217,6 @@ export default function PostDetail() {
                   {/* --- ヘッダー --- */}
                   <header className="mb-3 flex items-center justify-between">
                     <div className="flex flex-wrap items-center gap-x-2 text-[13px] text-gray-600">
-                      {/* ✅ プロフィール遷移追加 */}
                       <div
                         className="w-9 h-9 rounded-full overflow-hidden border border-gray-200 bg-gray-100 cursor-pointer hover:opacity-80 transition"
                         onClick={(e) => {
@@ -214,15 +227,13 @@ export default function PostDetail() {
                         {displayEmoji?.startsWith("/icons/") ? (
                           <img
                             src={displayEmoji}
-                            onError={(e) => {
-                              if (displayEmoji.endsWith(".png")) {
-                                e.target.src = displayEmoji.replace(".png", ".jpg");
-                              } else if (displayEmoji.endsWith(".jpg")) {
-                                e.target.src = displayEmoji.replace(".jpg", ".png");
-                              }
-                            }}
                             alt="ユーザーアイコン"
                             className="w-full h-full object-cover"
+                            onError={(e) => {
+                              if (e.target.src !== "/icons/icon1.webp") {
+                                e.target.src = "/icons/icon1.webp";
+                              }
+                            }}
                           />
                         ) : (
                           <span className="text-xl flex items-center justify-center w-full h-full">
@@ -316,13 +327,22 @@ export default function PostDetail() {
 
                   {urls.length > 0 && (
                     <div className="mb-3">
-                      {urls.map((url, i) => (
-                        <div key={i} className="mb-2">
-                          <URLCard url={url} />
+                      {/* ✅ 最初のURLだけカード表示 */}
+                      <div className="mb-2">
+                        <URLCard url={urls[0]} />
+                      </div>
+
+                      {/* ✅ 2つ目以降はクリック可能リンクとして表示 */}
+                      {urls.slice(1).map((url, i) => (
+                        <div key={i} className="text-sm text-blue-500 hover:underline break-all mb-1">
+                          <a href={url} target="_blank" rel="noopener noreferrer">
+                            {url}
+                          </a>
                         </div>
                       ))}
                     </div>
                   )}
+
 
                   {postImages.length > 0 && (
                     <div className="mb-3">
@@ -348,13 +368,13 @@ export default function PostDetail() {
                         {savedAccount.emoji?.startsWith("/icons/") ? (
                           <img
                             src={savedAccount.emoji}
-                            onError={(e) => {
-                              if (e.target.src.endsWith(".png")) {
-                                e.target.src = e.target.src.replace(".png", ".jpg");
-                              }
-                            }}
                             alt="ユーザーアイコン"
                             className="w-full h-full object-cover"
+                            onError={(e) => {
+                              if (e.target.src !== "/icons/icon1.webp") {
+                                e.target.src = "/icons/icon1.webp";
+                              }
+                            }}
                           />
                         ) : (
                           <span className="text-lg">{savedAccount.emoji || "🙂"}</span>
@@ -368,7 +388,7 @@ export default function PostDetail() {
                         <textarea
                           value={newComment}
                           onChange={(e) => setNewComment(e.target.value)}
-                          placeholder="コメントを入力..."
+                          placeholder="あなたの考えを共有しましょう"
                           rows={1}
                           maxLength={140}
                           onInput={(e) => {
@@ -422,6 +442,7 @@ export default function PostDetail() {
                   </div>
                 </article>
 
+                {/* --- 画像モーダル --- */}
                 {showImageModal && (
                   <ImageModal
                     imageSrc={currentImages[modalImageIndex]}
@@ -451,7 +472,7 @@ export default function PostDetail() {
           </main>
         </div>
 
-        {/* 🧩 最近の投稿 */}
+        {/* --- 最近の投稿 --- */}
         <div className="hidden lg:block lg:flex-[0.2] lg:w-[300px] shrink-0 mt-[72px]">
           <RecentPosts />
         </div>

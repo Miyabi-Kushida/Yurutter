@@ -13,7 +13,7 @@ export default function Header() {
   const { openAuthModal } = useAuth();
 
   // ✅ プロフィール絵文字の状態
-  const [emoji, setEmoji] = useState("😎");
+  const [emoji, setEmoji] = useState("🔑");
 
   // ✅ ローカルストレージから絵文字を読み込む関数
   const loadAccountEmoji = () => {
@@ -87,7 +87,11 @@ export default function Header() {
             {emoji?.startsWith("/icons/") ? (
               <img
                 src={emoji}
-                onError={(e) => (e.target.src = emoji.replace(".png", ".jpg"))}
+                onError={(e) => {
+                  if (e.target.src !== "/icons/icon1.webp") {
+                    e.target.src = "/icons/icon1.webp";
+                  }
+                }}
                 alt="プロフィールアイコン"
                 className="w-full h-full object-cover"
               />
@@ -101,7 +105,7 @@ export default function Header() {
             <div className="relative w-full">
               <input
                 type="text"
-                placeholder="投稿を検索..."
+                placeholder="Yurutterを検索してください"
                 value={query}
                 onChange={(e) => setQuery(e.target.value)}
                 onKeyDown={handleSearchKeyDown}
@@ -169,7 +173,11 @@ export default function Header() {
               {emoji?.startsWith("/icons/") ? (
                 <img
                   src={emoji}
-                  onError={(e) => (e.target.src = emoji.replace(".png", ".jpg"))}
+                  onError={(e) => {
+                    if (e.target.src !== "/icons/icon1.webp") {
+                      e.target.src = "/icons/icon1.webp";
+                    }
+                  }}
                   alt="プロフィールアイコン"
                   className="w-full h-full object-cover"
                 />
@@ -185,7 +193,7 @@ export default function Header() {
           <div className="relative">
             <input
               type="text"
-              placeholder="ユルッターを検索"
+              placeholder="なにかお探しもの...？"
               value={query}
               onChange={(e) => setQuery(e.target.value)}
               onKeyDown={handleSearchKeyDown}

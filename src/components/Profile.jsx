@@ -10,6 +10,7 @@ import { usePosts } from "../context/PostsContext";
 import { IconLike, IconLaugh, IconComment } from "./Icons";
 import ImageCarousel from "./ImageCarousel";
 import ImageModal from "./ImageModal";
+import { supabase } from "../utils/supabaseClient";
 
 export default function Profile() {
   const [account, setAccount] = useState(null);
@@ -21,49 +22,51 @@ export default function Profile() {
   const [modalImageIndex, setModalImageIndex] = useState(0);
   const [currentImages, setCurrentImages] = useState([]);
 
-  // ✅ アカウント情報をセット（自分 or 他人）
+  // ✅ アカウント情報を取得
   useEffect(() => {
-    const saved = JSON.parse(localStorage.getItem("bakatter-account") || "{}");
+    const fetchProfile = async () => {
+      const saved = JSON.parse(localStorage.getItem("bakatter-account") || "{}");
 
-    // 🚫 posts未ロード時は待機
-    if (!posts || posts.length === 0) return;
+      try {
+        if (id) {
+          const { data, error } = await supabase
+            .from("profiles")
+            .select("*")
+            .eq("id", id)
+            .maybeSingle();
 
-    if (id) {
-      // 他人プロフィール
-      if (id !== saved.id) {
-        const userPosts = posts.filter((p) => String(p.userId) === String(id));
-        if (userPosts.length > 0) {
-          const latest = userPosts[0];
-          setAccount({
-            id,
-            username: latest.username,
-            emoji: latest.emoji,
-            bio: latest.bio || "",
-            createdAt: latest.createdAt || new Date().toISOString(),
-          });
+          if (error) console.error("Supabase取得エラー:", error.message);
+
+          if (data) {
+            setAccount({
+              id: data.id,
+              username: data.username || "名無し",
+              emoji: data.avatar_url || "/icons/icon1.webp",
+              bio: data.bio || "",
+              createdAt: data.created_at || new Date().toISOString(),
+            });
+          } else {
+            setAccount({
+              id,
+              username: "名無し",
+              emoji: "👤",
+              bio: "",
+              createdAt: new Date().toISOString(),
+            });
+          }
+        } else if (saved.id) {
+          setAccount(saved);
         } else {
-          // 投稿がない相手でも仮プロフィール生成
-          setAccount({
-            id,
-            username: "名無し",
-            emoji: "👤",
-            bio: "",
-            createdAt: new Date().toISOString(),
-          });
+          navigate("/account-create", { replace: true });
         }
-      } else {
-        // 自分のプロフィールID指定時
-        setAccount(saved);
+      } catch (err) {
+        console.error("プロフィール取得エラー:", err);
       }
-    } else if (saved.id) {
-      // /profile に直接来た場合
-      setAccount(saved);
-    } else {
-      navigate("/account-create", { replace: true });
-    }
-  }, [id, posts, navigate]);
+    };
 
-  // 🔄 読み込み中
+    fetchProfile();
+  }, [id, navigate]);
+
   if (!account) {
     return (
       <div className="flex items-center justify-center h-screen text-gray-400">
@@ -72,66 +75,56 @@ export default function Profile() {
     );
   }
 
-  const isMyProfile =
-    !id || (account.id && account.id === JSON.parse(localStorage.getItem("bakatter-account") || "{}").id);
-
+  const saved = JSON.parse(localStorage.getItem("bakatter-account") || "{}");
+  const isMyProfile = !id || account.id === saved.id;
   const displayUsername = account.username || "名無し";
   const displayEmoji = account.emoji || "👤";
 
-  // 投稿・回答数
-  const postCount = posts.filter((p) => p.userId === account.id).length;
+  // 投稿数・統計など
+  const postCount = posts.filter((p) => String(p.userId) === String(account.id)).length;
   const answerCount = posts.reduce(
     (count, post) =>
-      count + (post.replies?.filter((r) => r.userId === account.id).length || 0),
+      count + (post.replies?.filter((r) => String(r.userId) === String(account.id)).length || 0),
     0
   );
 
-  // 💡 グッド・笑 の合計数を算出
   const totalLikes = posts.reduce((sum, post) => {
-    // 投稿が自分のものなら、そのlikesを加算
-    if (String(post.userId) === String(account.id)) {
+    if (String(post.userId) === String(account.id))
       sum += Array.isArray(post.likes) ? post.likes.length : (post.likes || 0);
-    }
-    // 回答にもlikesがあれば加算
-    if (post.replies?.length) {
-      const replyLikes = post.replies
+    if (post.replies?.length)
+      sum += post.replies
         .filter((r) => String(r.userId) === String(account.id))
-        .reduce((rSum, r) => {
-          return rSum + (Array.isArray(r.likes) ? r.likes.length : (r.likes || 0));
-        }, 0);
-      sum += replyLikes;
-    }
+        .reduce(
+          (rSum, r) => rSum + (Array.isArray(r.likes) ? r.likes.length : (r.likes || 0)),
+          0
+        );
     return sum;
   }, 0);
 
   const totalLaughs = posts.reduce((sum, post) => {
-    if (String(post.userId) === String(account.id)) {
+    if (String(post.userId) === String(account.id))
       sum += Array.isArray(post.laughs) ? post.laughs.length : (post.laughs || 0);
-    }
-    if (post.replies?.length) {
-      const replyLaughs = post.replies
+    if (post.replies?.length)
+      sum += post.replies
         .filter((r) => String(r.userId) === String(account.id))
-        .reduce((rSum, r) => {
-          return rSum + (Array.isArray(r.laughs) ? r.laughs.length : (r.laughs || 0));
-        }, 0);
-      sum += replyLaughs;
-    }
+        .reduce(
+          (rSum, r) => rSum + (Array.isArray(r.laughs) ? r.laughs.length : (r.laughs || 0)),
+          0
+        );
     return sum;
   }, 0);
 
-  // 投稿一覧
   const recentPosts = posts
-    .filter((p) => p.userId === account.id)
+    .filter((p) => String(p.userId) === String(account.id))
     .sort((a, b) => new Date(b.createdAt) - new Date(a.createdAt));
 
-  // 概要タブ
   const overviewItems = [
     ...posts
       .filter((p) => String(p.userId) === String(account.id))
       .map((p) => ({ ...p, type: "投稿", date: new Date(p.createdAt) })),
     ...posts.flatMap((p) =>
       (p.replies || [])
-        .filter((r) => r.userId && String(r.userId) === String(account.id))
+        .filter((r) => String(r.userId) === String(account.id))
         .map((r) => ({
           ...r,
           type: "回答",
@@ -168,11 +161,12 @@ export default function Profile() {
                   {displayEmoji?.startsWith("/icons/") ? (
                     <img
                       src={displayEmoji}
-                      onError={(e) => {
-                        if (displayEmoji.endsWith(".png"))
-                          e.target.src = displayEmoji.replace(".png", ".jpg");
-                      }}
                       alt="プロフィールアイコン"
+                      onError={(e) => {
+                        if (e.target.src !== "/icons/icon1.webp") {
+                          e.target.src = "/icons/icon1.webp";
+                        }
+                      }}
                       className="w-full h-full object-cover"
                     />
                   ) : (
@@ -202,7 +196,7 @@ export default function Profile() {
                 </div>
               </div>
 
-              {/* --- タブ --- */}
+              {/* --- タブ切り替え --- */}
               <div className="flex justify-center mb-6 border-b border-gray-200">
                 {tabItems.map((tab) => (
                   <button
@@ -218,74 +212,16 @@ export default function Profile() {
                 ))}
               </div>
 
-              {/* --- 各タブ内容 --- */}
-              {activeTab === "概要" && (
-                <Section title="📜 概要">
-                  {overviewItems.length > 0 ? (
-                    <div className="space-y-4">
-                      {overviewItems.map((item, i) => (
-                        <PostCard
-                          key={i}
-                          post={item}
-                          emoji={displayEmoji}
-                          username={displayUsername}
-                          navigate={navigate}
-                          showCategory
-                          onImageClick={handleImageClick}
-                        />
-                      ))}
-                    </div>
-                  ) : (
-                    <EmptyCard text="まだ投稿や回答がありません" />
-                  )}
-                </Section>
-              )}
-
-              {activeTab === "投稿" && (
-                <Section title="📝 投稿">
-                  {recentPosts.length > 0 ? (
-                    <div className="space-y-4">
-                      {recentPosts.map((post, i) => (
-                        <PostCard
-                          key={post.id || i}
-                          post={post}
-                          emoji={displayEmoji}
-                          username={displayUsername}
-                          navigate={navigate}
-                          showCategory
-                          onImageClick={handleImageClick}
-                        />
-                      ))}
-                    </div>
-                  ) : (
-                    <EmptyCard text="まだ投稿がありません" />
-                  )}
-                </Section>
-              )}
-
-              {activeTab === "回答" && (
-                <Section title="💬 回答">
-                  {overviewItems.filter((i) => i.type === "回答").length > 0 ? (
-                    <div className="space-y-4">
-                      {overviewItems
-                        .filter((i) => i.type === "回答")
-                        .map((reply, i) => (
-                          <PostCard
-                            key={i}
-                            post={reply}
-                            emoji={displayEmoji}
-                            username={displayUsername}
-                            navigate={navigate}
-                            showCategory
-                            onImageClick={handleImageClick}
-                          />
-                        ))}
-                    </div>
-                  ) : (
-                    <EmptyCard text="まだ回答がありません" />
-                  )}
-                </Section>
-              )}
+              {/* --- タブ内容 --- */}
+              <TabContent
+                activeTab={activeTab}
+                overviewItems={overviewItems}
+                recentPosts={recentPosts}
+                displayEmoji={displayEmoji}
+                displayUsername={displayUsername}
+                navigate={navigate}
+                handleImageClick={handleImageClick}
+              />
             </LayoutContainer>
           </main>
         </div>
@@ -336,6 +272,87 @@ function Section({ title, children }) {
   );
 }
 
+function EmptyCard({ text }) {
+  return (
+    <p className="text-gray-500 text-sm text-center bg-white py-5 rounded-xl shadow-inner">
+      {text}
+    </p>
+  );
+}
+
+function TabContent({ activeTab, overviewItems, recentPosts, displayEmoji, displayUsername, navigate, handleImageClick }) {
+  const filteredReplies = overviewItems.filter((i) => i.type === "回答");
+  return (
+    <>
+      {activeTab === "概要" && (
+        <Section title="📜 概要">
+          {overviewItems.length > 0 ? (
+            <div className="space-y-4">
+              {overviewItems.map((item, i) => (
+                <PostCard
+                  key={i}
+                  post={item}
+                  emoji={displayEmoji}
+                  username={displayUsername}
+                  navigate={navigate}
+                  showCategory
+                  onImageClick={handleImageClick}
+                />
+              ))}
+            </div>
+          ) : (
+            <EmptyCard text="まだ投稿や回答がありません" />
+          )}
+        </Section>
+      )}
+
+      {activeTab === "投稿" && (
+        <Section title="📝 投稿">
+          {recentPosts.length > 0 ? (
+            <div className="space-y-4">
+              {recentPosts.map((post, i) => (
+                <PostCard
+                  key={post.id || i}
+                  post={post}
+                  emoji={displayEmoji}
+                  username={displayUsername}
+                  navigate={navigate}
+                  showCategory
+                  onImageClick={handleImageClick}
+                />
+              ))}
+            </div>
+          ) : (
+            <EmptyCard text="まだ投稿がありません" />
+          )}
+        </Section>
+      )}
+
+      {activeTab === "回答" && (
+        <Section title="💬 回答">
+          {filteredReplies.length > 0 ? (
+            <div className="space-y-4">
+              {filteredReplies.map((reply, i) => (
+                <PostCard
+                  key={i}
+                  post={reply}
+                  emoji={displayEmoji}
+                  username={displayUsername}
+                  navigate={navigate}
+                  showCategory
+                  onImageClick={handleImageClick}
+                />
+              ))}
+            </div>
+          ) : (
+            <EmptyCard text="まだ回答がありません" />
+          )}
+        </Section>
+      )}
+    </>
+  );
+}
+
 function PostCard({ post, emoji, username, navigate, showCategory, onImageClick }) {
   const category = post.category || post.parentCategory || "未分類";
   const postImages =
@@ -361,8 +378,12 @@ function PostCard({ post, emoji, username, navigate, showCategory, onImageClick 
             {emoji?.startsWith("/icons/") ? (
               <img
                 src={emoji}
-                onError={(e) => (e.target.src = emoji.replace(".png", ".jpg"))}
                 alt="ユーザーアイコン"
+                onError={(e) => {
+                  if (e.target.src !== "/icons/icon1.webp") {
+                    e.target.src = "/icons/icon1.webp";
+                  }
+                }}
                 className="w-full h-full object-cover"
               />
             ) : (
@@ -395,9 +416,17 @@ function PostCard({ post, emoji, username, navigate, showCategory, onImageClick 
 
       {urls.length > 0 && (
         <div className="mb-3">
-          {urls.map((url, index) => (
-            <div key={index} className="mb-2">
-              <URLCard url={url} />
+          {/* ✅ 最初のURLだけカード表示 */}
+          <div className="mb-2">
+            <URLCard url={urls[0]} />
+          </div>
+
+          {/* ✅ 2つ目以降はクリック可能リンクとして表示 */}
+          {urls.slice(1).map((url, i) => (
+            <div key={i} className="text-sm text-blue-500 hover:underline break-all mb-1">
+              <a href={url} target="_blank" rel="noopener noreferrer">
+                {url}
+              </a>
             </div>
           ))}
         </div>
@@ -416,32 +445,21 @@ function PostCard({ post, emoji, username, navigate, showCategory, onImageClick 
       )}
 
       <div className="flex items-center gap-6 text-[14px] text-gray-500">
-        {/* 👍 いいね */}
         <div className="flex items-center gap-1.5">
           <IconLike width={16} height={16} />
           <span>{Array.isArray(post.likes) ? post.likes.length : (post.likes || 0)}</span>
         </div>
 
-        {/* 🤣 笑い */}
         <div className="flex items-center gap-1.5">
           <IconLaugh width={16} height={16} />
           <span>{Array.isArray(post.laughs) ? post.laughs.length : (post.laughs || 0)}</span>
         </div>
 
-        {/* 💬 コメント */}
         <div className="flex items-center gap-1.5">
           <IconComment width={16} height={16} />
           <span>{post.replies?.length || 0}</span>
         </div>
       </div>
     </div>
-  );
-}
-
-function EmptyCard({ text }) {
-  return (
-    <p className="text-gray-500 text-sm text-center bg-white py-5 rounded-xl shadow-inner">
-      {text}
-    </p>
   );
 }

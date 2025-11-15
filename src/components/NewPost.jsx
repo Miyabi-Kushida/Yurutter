@@ -1,22 +1,23 @@
 import { useState } from "react";
 import { useNavigate } from "react-router-dom";
+import { useAuth } from "../context/AuthContext";
 import { usePosts } from "../context/PostsContext";
-import { useAuth } from "../context/AuthContext"; // ← 追加！
 import Header from "./Header";
 import LayoutContainer from "./LayoutContainer";
 import RecentPosts from "./RecentPosts";
 
 export default function NewPost() {
   const navigate = useNavigate();
+  const { openAuthModal } = useAuth();
   const { addPost } = usePosts();
-  const { openAuthModal } = useAuth(); // ← モーダル呼び出し用
   const [text, setText] = useState("");
   const [category, setCategory] = useState("くだらない日常");
   const [images, setImages] = useState([]);
+  const [loading, setLoading] = useState(false);
   const maxLength = 140;
 
-  const savedAccount = JSON.parse(localStorage.getItem("bakatter-account") || "null");
-  const isLoggedIn = !!savedAccount; // ← ログイン状態を判定
+  const savedAccount = JSON.parse(localStorage.getItem("bakatter-account") || "{}");
+  const isLoggedIn = !!savedAccount?.id;
 
   const categories = [
     "くだらない日常",
@@ -35,7 +36,7 @@ export default function NewPost() {
   const handleImageUpload = (e) => {
     if (!isLoggedIn) {
       e.preventDefault();
-      openAuthModal(); // ← 未ログインならモーダル
+      openAuthModal();
       return;
     }
 
@@ -57,54 +58,64 @@ export default function NewPost() {
     setImages(images.filter((_, i) => i !== index));
   };
 
-  // ✅ 投稿処理
+  // ✅ Supabaseへ投稿
   const handleSubmit = async (e) => {
     e.preventDefault();
-
+    if (loading) return;
     if (!isLoggedIn) {
-      openAuthModal(); // ← 投稿ボタンもガード
+      openAuthModal();
+      return;
+    }
+    if (!text.trim()) return;
+
+    setLoading(true);
+
+    let uploadedUrls = [];
+
+    // 🖼 Cloudinaryへ画像アップロード
+    try {
+      if (images.length > 0) {
+        uploadedUrls = await Promise.all(
+          images.map(async (img) => {
+            const formData = new FormData();
+            formData.append("file", img.file);
+            formData.append("upload_preset", "unsigned_upload");
+            const res = await fetch(
+              "https://api.cloudinary.com/v1_1/dlbr3gemb/image/upload",
+              { method: "POST", body: formData }
+            );
+            const data = await res.json();
+            return data.secure_url;
+          })
+        );
+      }
+    } catch (err) {
+      console.error("❌ 画像アップロードエラー:", err);
+      alert("画像のアップロードに失敗しました。");
+      setLoading(false);
       return;
     }
 
-    if (!text.trim()) return;
+    // 🧱 SupabaseへINSERT
+    try {
+      const newPost = await addPost({
+        text: text.trim(),
+        category,
+        images: uploadedUrls,
+      });
 
-    const account = savedAccount || { username: "匿名", emoji: "👤", bio: "" };
+      if (!newPost) throw new Error("投稿に失敗しました。");
 
-    let uploadedUrls = [];
-    if (images.length > 0) {
-      uploadedUrls = await Promise.all(
-        images.map(async (img) => {
-          const formData = new FormData();
-          formData.append("file", img.file);
-          formData.append("upload_preset", "unsigned_upload");
-          const res = await fetch(
-            "https://api.cloudinary.com/v1_1/dlbr3gemb/image/upload",
-            { method: "POST", body: formData }
-          );
-          const data = await res.json();
-          return data.secure_url;
-        })
-      );
+      alert("投稿が完了しました！");
+      setText("");
+      setImages([]);
+      navigate("/", { state: { highlightId: newPost.id } });
+    } catch (err) {
+      console.error("❌ 投稿中エラー:", err);
+      alert("投稿処理中にエラーが発生しました。");
+    } finally {
+      setLoading(false);
     }
-
-    const newPost = {
-      id: Date.now(),
-      userId: account.id || `u_${Date.now()}`,
-      user: account.username || "あなた",
-      emoji: account.emoji || "👤",
-      bio: account.bio || "",
-      text: text.trim(),
-      category,
-      images: uploadedUrls,
-      createdAt: new Date().toISOString(),
-      likes: 0,
-      laughs: 0,
-      comments: [],
-    };
-
-    addPost(newPost);
-    alert("投稿しました！");
-    navigate("/");
   };
 
   return (
@@ -127,15 +138,15 @@ export default function NewPost() {
                     value={text}
                     onChange={(e) => {
                       if (!isLoggedIn) {
-                        openAuthModal(); // ← 未ログインで入力しようとしたらモーダル
+                        openAuthModal();
                         return;
                       }
                       setText(e.target.value);
                     }}
                     onFocus={() => {
-                      if (!isLoggedIn) openAuthModal(); // ← クリック時でも対応
+                      if (!isLoggedIn) openAuthModal();
                     }}
-                    placeholder="例: なんで月曜って憂鬱なん？"
+                    placeholder="例: 今日のお昼ごはん魚肉ソーセージだった"
                     className="w-full h-32 p-3 border border-gray-300 rounded-lg resize-none focus:border-brand focus:outline-none"
                     maxLength={maxLength}
                   />
@@ -144,7 +155,7 @@ export default function NewPost() {
                   </div>
                 </div>
 
-                {/* カテゴリ選択 */}
+                {/* カテゴリ */}
                 <div>
                   <label className="block text-sm font-semibold text-gray-700 mb-2">
                     カテゴリ
@@ -162,12 +173,11 @@ export default function NewPost() {
                   </select>
                 </div>
 
-                {/* 🖼 画像添付 */}
+                {/* 画像添付 */}
                 <div>
                   <label className="block text-sm font-semibold text-gray-700 mb-2">
                     画像を添付（最大4枚・任意）
                   </label>
-
                   <div className="border-2 border-dashed border-gray-300 rounded-lg p-6 text-center hover:border-brand transition-colors">
                     {images.length > 0 ? (
                       <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
@@ -221,7 +231,7 @@ export default function NewPost() {
                           onClick={(e) => {
                             if (!isLoggedIn) {
                               e.preventDefault();
-                              openAuthModal(); // ← ボタン押下時もガード
+                              openAuthModal();
                             }
                           }}
                         >
@@ -236,14 +246,14 @@ export default function NewPost() {
                 <div className="pt-4">
                   <button
                     type="submit"
-                    disabled={!text.trim()}
+                    disabled={!text.trim() || loading}
                     className={`w-full py-3 rounded-lg font-medium transition-colors ${
-                      text.trim()
+                      text.trim() && !loading
                         ? "bg-brand text-white hover:bg-brand-dark"
                         : "bg-gray-300 text-gray-500 cursor-not-allowed"
                     }`}
                   >
-                    投稿する
+                    {loading ? "投稿中..." : "投稿する"}
                   </button>
                 </div>
               </form>
@@ -251,13 +261,7 @@ export default function NewPost() {
           </main>
         </div>
 
-        <div
-          className="
-            hidden lg:block 
-            lg:flex-[0.2] lg:w-[300px] shrink-0
-            mt-[72px]
-          "
-        >
+        <div className="hidden lg:block lg:flex-[0.2] lg:w-[300px] shrink-0 mt-[72px]">
           <RecentPosts />
         </div>
       </div>

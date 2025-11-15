@@ -1,62 +1,54 @@
-// src/context/PostsContext.jsx
 import { createContext, useContext, useState, useEffect } from "react";
-import postsData from "../data/posts.json";
+import { supabase } from "../utils/supabaseClient";
 
 const PostsContext = createContext();
 
-/** ✅ 旧データ（数値形式）を配列形式に変換 */
+/** ✅ データ整形関数（旧仕様との互換保持） */
 const normalizePosts = (posts) => {
-  return posts.map((post) => {
-    const normalizeReplies = (replies) =>
-      replies?.map((reply) => ({
-        ...reply,
-        likes: Array.isArray(reply.likes) ? reply.likes : [],
-        laughs: Array.isArray(reply.laughs) ? reply.laughs : [],
-        replies: normalizeReplies(reply.replies || []),
-      })) || [];
-
-    return {
-      ...post,
-      likes: Array.isArray(post.likes) ? post.likes : [],
-      laughs: Array.isArray(post.laughs) ? post.laughs : [],
-      replies: normalizeReplies(post.replies || []),
-    };
-  });
+  return posts.map((post) => ({
+    ...post,
+    likes: Array.isArray(post.likes) ? post.likes : [],
+    laughs: Array.isArray(post.laughs) ? post.laughs : [],
+    replies: Array.isArray(post.replies) ? post.replies : [],
+    createdAt: post.createdAt ?? post.created_at ?? null,
+  }));
 };
 
 export function PostsProvider({ children }) {
-  const [posts, setPosts] = useState(() => {
-    const savedPosts = localStorage.getItem("bakatter-posts");
-    if (savedPosts) {
-      try {
-        const parsed = JSON.parse(savedPosts);
-        return normalizePosts(parsed);
-      } catch (error) {
-        console.error("Failed to parse saved posts:", error);
-      }
+  const [posts, setPosts] = useState([]);
+  const [reportedItems, setReportedItems] = useState([]);
+
+  /** ✅ 投稿一覧取得 */
+  const fetchPosts = async () => {
+    const { data, error } = await supabase
+      .from("posts")
+      .select("*")
+      .order("created_at", { ascending: false });
+
+    if (error) {
+      console.error("❌ Supabase fetch error:", error.message);
+      const saved = localStorage.getItem("bakatter-posts");
+      if (saved) setPosts(JSON.parse(saved));
+    } else {
+      const normalized = normalizePosts(data || []);
+      setPosts(normalized);
+      localStorage.setItem("bakatter-posts", JSON.stringify(normalized));
     }
-    return normalizePosts(postsData);
-  });
+  };
 
-  const [reportedItems, setReportedItems] = useState(() => {
-    const saved = localStorage.getItem("reported-items");
-    return saved ? JSON.parse(saved) : [];
-  });
-
+  /** ✅ 初回ロード */
   useEffect(() => {
-    localStorage.setItem("bakatter-posts", JSON.stringify(posts));
-  }, [posts]);
+    fetchPosts();
 
-  useEffect(() => {
-    localStorage.setItem("reported-items", JSON.stringify(reportedItems));
-  }, [reportedItems]);
+    const savedReports = localStorage.getItem("reported-items");
+    if (savedReports) setReportedItems(JSON.parse(savedReports));
+  }, []);
 
-  /** 投稿追加 */
-  const addPost = (newPost) => {
+  /** ✅ 投稿追加（SupabaseにINSERT） */
+  const addPost = async (newPost) => {
     const savedAccount = JSON.parse(localStorage.getItem("bakatter-account") || "{}");
 
     const post = {
-      id: `p${Date.now()}_${Math.random().toString(36).slice(2, 8)}`,
       userId: savedAccount.id || "guest",
       username: savedAccount.username || "名無し",
       emoji: savedAccount.emoji || "👤",
@@ -67,92 +59,212 @@ export function PostsProvider({ children }) {
         : newPost.image
         ? [newPost.image]
         : [],
-      likes: [], // ← 配列に変更
+      likes: [],
       laughs: [],
+      replies: [], // ✅ 初期値
       comments: 0,
-      createdAt: new Date().toISOString(),
-      replies: [],
+      created_at: new Date().toISOString(),
     };
 
-    setPosts((prev) => [post, ...prev]);
-    return post;
+    const { data, error } = await supabase.from("posts").insert([post]).select("*");
+    if (error) {
+      console.error("❌ Supabase insert error:", error.message);
+      setPosts((prev) => [post, ...prev]);
+      return post;
+    }
+
+    setPosts((prev) => [data[0], ...prev]);
+    return data[0];
   };
 
-  /** コメント追加（再帰） */
-  const addNestedComment = (postId, parentId, newComment) => {
+  /** ✅ コメント追加（親コメント対応） */
+  const addNestedComment = async (postId, parentId, newComment) => {
+    try {
+      const { data, error } = await supabase
+        .from("posts")
+        .select("replies")
+        .eq("id", postId)
+        .single();
+
+      if (error) throw error;
+
+      const currentReplies = Array.isArray(data.replies) ? data.replies : [];
+
+      // 🧠 再帰的に対象コメントへ挿入
+      const insertReply = (comments, parentId, newReply) => {
+        if (!parentId) return [...comments, newReply];
+        return comments.map((c) =>
+          c.id === parentId
+            ? { ...c, replies: [...(c.replies || []), newReply] }
+            : { ...c, replies: insertReply(c.replies || [], parentId, newReply) }
+        );
+      };
+
+      const updatedReplies = insertReply(currentReplies, parentId, newComment);
+
+      const { error: updateError } = await supabase
+        .from("posts")
+        .update({ replies: updatedReplies })
+        .eq("id", postId);
+
+      if (updateError) throw updateError;
+
+      // ✅ ローカルstateも更新
+      setPosts((prev) =>
+        prev.map((p) => (p.id === postId ? { ...p, replies: updatedReplies } : p))
+      );
+    } catch (err) {
+      console.error("❌ コメント追加失敗:", err.message);
+    }
+  };
+
+  /** ✅ リアクション更新（Supabase + ローカル両方反映） */
+  const toggleReaction = async (targetId, userId, type) => {
+    let optimisticValue = null;
+
+    setPosts((prev) =>
+      prev.map((item) => {
+        if (String(item.id) === String(targetId)) {
+          const arr = Array.isArray(item[type]) ? item[type] : [];
+          const already = arr.includes(userId);
+          optimisticValue = already ? arr.filter((id) => id !== userId) : [...arr, userId];
+          return { ...item, [type]: optimisticValue };
+        }
+        return item;
+      })
+    );
+
+    if (!optimisticValue) return null;
+
+    const { error } = await supabase
+      .from("posts")
+      .update({ [type]: optimisticValue })
+      .eq("id", targetId);
+
+    if (error) {
+      console.error("❌ Supabase update error:", error.message);
+      fetchPosts();
+    } else {
+      fetchPosts();
+    }
+
+    return optimisticValue;
+  };
+
+  /** ✅ コメント・返信のリアクション更新 */
+  const toggleCommentReaction = async (postId, commentId, userId, type) => {
+    let optimisticReplies = null;
+    let updatedTarget = null;
+
+    const updateReplies = (items = []) => {
+      let changed = false;
+
+      const updatedItems = items.map((item) => {
+        if (String(item.id) === String(commentId)) {
+          const arr = Array.isArray(item[type]) ? item[type] : [];
+          const already = arr.includes(userId);
+          const nextValue = already ? arr.filter((id) => id !== userId) : [...arr, userId];
+          changed = true;
+          updatedTarget = nextValue;
+          return {
+            ...item,
+            [type]: nextValue,
+          };
+        }
+
+        if (item.replies?.length) {
+          const { updated: nestedUpdated, changed: nestedChanged } = updateReplies(
+            item.replies
+          );
+          if (nestedChanged) {
+            changed = true;
+            return { ...item, replies: nestedUpdated };
+          }
+        }
+
+        return item;
+      });
+
+      return { updated: updatedItems, changed };
+    };
+
     setPosts((prev) =>
       prev.map((post) => {
         if (String(post.id) !== String(postId)) return post;
 
-        const addReplyRecursive = (comments) =>
-          comments.map((c) => {
-            if (String(c.id) === String(parentId)) {
-              return {
-                ...c,
-                replies: [...(c.replies || []), newComment],
-              };
-            }
-            if (c.replies?.length) {
-              return { ...c, replies: addReplyRecursive(c.replies) };
-            }
-            return c;
-          });
+        const { updated, changed } = updateReplies(post.replies || []);
+        if (!changed) return post;
 
-        if (!parentId) {
-          return {
-            ...post,
-            replies: [...(post.replies || []), newComment],
-          };
-        } else {
-          return {
-            ...post,
-            replies: addReplyRecursive(post.replies || []),
-          };
-        }
+        optimisticReplies = updated;
+        return { ...post, replies: updated };
       })
     );
+
+    if (!optimisticReplies || !updatedTarget) return null;
+
+    const { error } = await supabase
+      .from("posts")
+      .update({ replies: optimisticReplies })
+      .eq("id", postId);
+
+    if (error) {
+      console.error("❌ コメントリアクション更新失敗:", error.message);
+      fetchPosts();
+    } else {
+      fetchPosts();
+    }
+
+    return updatedTarget;
   };
 
-  /** 👍😂 リアクションのトグル（投稿・コメント・返信対応：完全修正版） */
-  const toggleReaction = (targetId, userId, type) => {
-    const updateItem = (item) => {
-      // 対象IDに一致
-      if (String(item.id) === String(targetId)) {
-        const arr = Array.isArray(item[type]) ? item[type] : [];
-        const already = arr.includes(userId);
-        const newArr = already
-          ? arr.filter((id) => id !== userId)
-          : [...arr, userId];
-        return { ...item, [type]: newArr };
-      }
-
-      // 返信を再帰的に更新
-      if (item.replies?.length) {
-        const updatedReplies = item.replies.map(updateItem);
-        return { ...item, replies: updatedReplies };
-      }
-
-      return item;
-    };
-
-    setPosts((prev) => prev.map(updateItem));
+  /** 🗑 投稿削除 */
+  const deletePost = async (targetId) => {
+    await supabase.from("posts").delete().eq("id", targetId);
+    setPosts((prev) => prev.filter((p) => String(p.id) !== String(targetId)));
   };
 
-  /** 投稿取得 */
-  const getPostById = (postId) =>
-    posts.find((p) => String(p.id) === String(postId));
+  /** 🔹 コメント削除（ネスト対応） */
+  const deleteComment = async (postId, commentId) => {
+    try {
+      const { data } = await supabase.from("posts").select("replies").eq("id", postId).single();
 
-  /** 削除（再帰対応） */
-  const deletePost = (targetId) => {
-    const removeRecursive = (items) =>
-      items
-        .filter((item) => String(item.id) !== String(targetId))
-        .map((item) => ({
-          ...item,
-          replies: item.replies ? removeRecursive(item.replies) : [],
-        }));
-    setPosts((prev) => removeRecursive(prev));
+      if (!data) return;
+      const currentReplies = Array.isArray(data.replies) ? data.replies : [];
+
+      // 再帰的削除
+      const removeRecursive = (comments) =>
+        comments
+          .filter((c) => c.id !== commentId)
+          .map((c) => ({
+            ...c,
+            replies: removeRecursive(c.replies || []),
+          }));
+
+      const updatedReplies = removeRecursive(currentReplies);
+
+      // Supabase更新
+      const { error } = await supabase
+        .from("posts")
+        .update({ replies: updatedReplies })
+        .eq("id", postId);
+      if (error) throw error;
+
+      // State更新
+      setPosts((prev) =>
+        prev.map((p) => (p.id === postId ? { ...p, replies: updatedReplies } : p))
+      );
+    } catch (err) {
+      console.error("❌ コメント削除失敗:", err.message);
+    }
   };
+
+  /** 🪶 投稿取得 */
+  const getPostById = (id) => posts.find((p) => String(p.id) === String(id));
+
+  /** 🚨 通報リスト保存 */
+  useEffect(() => {
+    localStorage.setItem("reported-items", JSON.stringify(reportedItems));
+  }, [reportedItems]);
 
   return (
     <PostsContext.Provider
@@ -160,9 +272,12 @@ export function PostsProvider({ children }) {
         posts,
         addPost,
         addNestedComment,
-        toggleReaction, // ← 完全修正版
+        toggleReaction,
+        toggleCommentReaction,
         getPostById,
         deletePost,
+        deleteComment, // 🔹 追加
+        fetchPosts,
         reportedItems,
         setReportedItems,
       }}
@@ -174,7 +289,6 @@ export function PostsProvider({ children }) {
 
 export function usePosts() {
   const context = useContext(PostsContext);
-  if (!context)
-    throw new Error("usePosts must be used within a PostsProvider");
+  if (!context) throw new Error("usePosts must be used within a PostsProvider");
   return context;
 }
