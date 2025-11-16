@@ -193,7 +193,7 @@ export default function Header() {
           <div className="relative">
             <input
               type="text"
-              placeholder="なにかお探しもの...？"
+              placeholder="Yurutterを検索してください"
               value={query}
               onChange={(e) => setQuery(e.target.value)}
               onKeyDown={handleSearchKeyDown}
