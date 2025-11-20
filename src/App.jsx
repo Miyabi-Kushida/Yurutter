@@ -13,6 +13,7 @@ import SearchResults from "./components/SearchResults";
 import ScrollToTop from "./components/ScrollToTop";
 import AccountCreate from "./components/AccountCreate";
 import Login from "./components/Login"; // ✅ ← 追加！
+import AuthCallback from "./components/AuthCallback";  // ← 追加
 
 // ✅ ログイン済みなら /account/create や /login に入れないように制御
 function ProtectedRoute({ children }) {
@@ -33,6 +34,7 @@ export default function App() {
           <Route element={<MainLayout />}>
             <Route path="/" element={<Home />} />
             <Route path="/category/:name" element={<Home />} />
+            <Route path="/auth/callback" element={<AuthCallback />} />
             <Route path="/post/:postId" element={<PostDetail />} />
             <Route path="/post/:postId/answers/:answerId" element={<ReplyDetail />} />
             <Route path="/new" element={<NewPost />} />
