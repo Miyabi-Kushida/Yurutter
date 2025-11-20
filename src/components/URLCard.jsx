@@ -11,7 +11,7 @@ export default function URLCard({ url }) {
 
         // Supabase Edge Function を叩く
         const res = await fetch(
-          "https://<project-ref>.functions.supabase.co/url-preview",
+          "https://nizcfjxngngqidgwzexc.supabase.co/functions/v1/url-preview",
           {
             method: "POST",
             headers: {
