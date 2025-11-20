@@ -30,11 +30,13 @@ export default function App() {
       <PostsProvider>
         <ScrollToTop />
         <Routes>
+
+          {/* AuthCallback は MainLayout 外に置く */}
+  <Route path="/auth/callback" element={<AuthCallback />} />
           {/* ✅ 共通レイアウトを使用するルート */}
           <Route element={<MainLayout />}>
             <Route path="/" element={<Home />} />
             <Route path="/category/:name" element={<Home />} />
-            <Route path="/auth/callback" element={<AuthCallback />} />
             <Route path="/post/:postId" element={<PostDetail />} />
             <Route path="/post/:postId/answers/:answerId" element={<ReplyDetail />} />
             <Route path="/new" element={<NewPost />} />
