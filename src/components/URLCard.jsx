@@ -5,7 +5,7 @@ export default function URLCard({ url }) {
   const [loading, setLoading] = useState(true);
 
   const FUNCTION_URL =
-    "https://<project-ref>.functions.supabase.co/url-preview";
+    "https://nizcfjxngngqidgwzexc.supabase.co/functions/v1/url-preview";
 
   useEffect(() => {
     const fetchMetadata = async () => {
