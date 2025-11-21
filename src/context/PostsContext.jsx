@@ -44,38 +44,63 @@ export function PostsProvider({ children }) {
     if (savedReports) setReportedItems(JSON.parse(savedReports));
   }, []);
 
-  /** ✅ 投稿追加（SupabaseにINSERT） */
-  const addPost = async (newPost) => {
-    const savedAccount = JSON.parse(localStorage.getItem("bakatter-account") || "{}");
+  /** ✅ 投稿追加（SupabaseにINSERT + 直後にDBから最新行を再取得） */
+const addPost = async (newPost) => {
+  const savedAccount = JSON.parse(localStorage.getItem("bakatter-account") || "{}");
 
-    const post = {
-      userId: savedAccount.id || "guest",
-      username: savedAccount.username || "名無し",
-      emoji: savedAccount.emoji || "👤",
-      text: newPost.text || "",
-      category: newPost.category || "未分類",
-      images: Array.isArray(newPost.images)
-        ? newPost.images
-        : newPost.image
-        ? [newPost.image]
-        : [],
-      likes: [],
-      laughs: [],
-      replies: [], // ✅ 初期値
-      comments: 0,
-      created_at: new Date().toISOString(),
-    };
-
-    const { data, error } = await supabase.from("posts").insert([post]).select("*");
-    if (error) {
-      console.error("❌ Supabase insert error:", error.message);
-      setPosts((prev) => [post, ...prev]);
-      return post;
-    }
-
-    setPosts((prev) => [data[0], ...prev]);
-    return data[0];
+  // INSERT 用のデータ
+  const post = {
+    userId: savedAccount.id || "guest",
+    username: savedAccount.username || "名無し",
+    emoji: savedAccount.emoji || "👤",
+    text: newPost.text || "",
+    category: newPost.category || "未分類",
+    images: Array.isArray(newPost.images)
+      ? newPost.images
+      : newPost.image
+      ? [newPost.image]
+      : [],
+    likes: [],
+    laughs: [],
+    replies: [],
+    comments: 0,
+    created_at: new Date().toISOString(),
   };
+
+  // -----------------------------
+  // ① Supabase に INSERT
+  // -----------------------------
+  const { data: inserted, error: insertError } = await supabase
+    .from("posts")
+    .insert([post])
+    .select()
+    .single();
+
+  if (insertError) {
+    console.error("❌ Supabase insert error:", insertError.message);
+    setPosts((prev) => [post, ...prev]);
+    return post;
+  }
+
+  // -----------------------------
+  // ② INSERT 終了後、DB の最新行を取得
+  //     ここで og_image / og_title / og_description が反映される
+  // -----------------------------
+  const { data: fresh, error: fetchError } = await supabase
+    .from("posts")
+    .select("*")
+    .eq("id", inserted.id)
+    .single();
+
+  const finalPost = fetchError ? inserted : fresh;
+
+  // -----------------------------
+  // ③ ローカル state の更新
+  // -----------------------------
+  setPosts((prev) => [finalPost, ...prev]);
+
+  return finalPost;
+};
 
   /** ✅ コメント追加（親コメント対応） */
   const addNestedComment = async (postId, parentId, newComment) => {
