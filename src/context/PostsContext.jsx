@@ -1,294 +1,223 @@
-import { createContext, useContext, useState, useEffect } from "react";
-import { supabase } from "../utils/supabaseClient";
+import { useEffect, useState } from "react";
+import { useNavigate } from "react-router-dom";
+import { extractURLs } from "../utils/url";
+import { usePosts } from "../context/PostsContext";
+import { useAuth } from "../context/AuthContext";
 
-const PostsContext = createContext();
+export default function RecentPosts() {
+  const [recentPosts, setRecentPosts] = useState([]);
+  const [urlThumbnails, setUrlThumbnails] = useState({});
+  const [isLoggedIn, setIsLoggedIn] = useState(false);
 
-/** ✅ データ整形関数（旧仕様との互換保持） */
-const normalizePosts = (posts) => {
-  return posts.map((post) => ({
-    ...post,
-    likes: Array.isArray(post.likes) ? post.likes : [],
-    laughs: Array.isArray(post.laughs) ? post.laughs : [],
-    replies: Array.isArray(post.replies) ? post.replies : [],
-    createdAt: post.createdAt ?? post.created_at ?? null,
-  }));
-};
+  const navigate = useNavigate();
+  const { posts } = usePosts();
+  const { openAuthModal } = useAuth();
 
-export function PostsProvider({ children }) {
-  const [posts, setPosts] = useState([]);
-  const [reportedItems, setReportedItems] = useState([]);
-
-  /** ✅ 投稿一覧取得 */
-  const fetchPosts = async () => {
-    const { data, error } = await supabase
-      .from("posts")
-      .select("*")
-      .order("created_at", { ascending: false });
-
-    if (error) {
-      console.error("❌ Supabase fetch error:", error.message);
-      const saved = localStorage.getItem("bakatter-posts");
-      if (saved) setPosts(JSON.parse(saved));
-    } else {
-      const normalized = normalizePosts(data || []);
-      setPosts(normalized);
-      localStorage.setItem("bakatter-posts", JSON.stringify(normalized));
-    }
-  };
-
-  /** ✅ 初回ロード */
+  // -----------------------------
+  //  ログイン状態 & 履歴ロード
+  // -----------------------------
   useEffect(() => {
-    fetchPosts();
+    const savedAccount = JSON.parse(localStorage.getItem("bakatter-account") || "null");
+    setIsLoggedIn(!!savedAccount);
 
-    const savedReports = localStorage.getItem("reported-items");
-    if (savedReports) setReportedItems(JSON.parse(savedReports));
-  }, []);
-
-  /** ✅ 投稿追加（SupabaseにINSERT） */
-  const addPost = async (newPost) => {
-    const savedAccount = JSON.parse(localStorage.getItem("bakatter-account") || "{}");
-
-    const post = {
-      userId: savedAccount.id || "guest",
-      username: savedAccount.username || "名無し",
-      emoji: savedAccount.emoji || "👤",
-      text: newPost.text || "",
-      category: newPost.category || "未分類",
-      images: Array.isArray(newPost.images)
-        ? newPost.images
-        : newPost.image
-        ? [newPost.image]
-        : [],
-      likes: [],
-      laughs: [],
-      replies: [], // ✅ 初期値
-      comments: 0,
-      created_at: new Date().toISOString(),
-    };
-
-    const { data, error } = await supabase.from("posts").insert([post]).select("*");
-    if (error) {
-      console.error("❌ Supabase insert error:", error.message);
-      setPosts((prev) => [post, ...prev]);
-      return post;
-    }
-
-    setPosts((prev) => [data[0], ...prev]);
-    return data[0];
-  };
-
-  /** ✅ コメント追加（親コメント対応） */
-  const addNestedComment = async (postId, parentId, newComment) => {
-    try {
-      const { data, error } = await supabase
-        .from("posts")
-        .select("replies")
-        .eq("id", postId)
-        .single();
-
-      if (error) throw error;
-
-      const currentReplies = Array.isArray(data.replies) ? data.replies : [];
-
-      // 🧠 再帰的に対象コメントへ挿入
-      const insertReply = (comments, parentId, newReply) => {
-        if (!parentId) return [...comments, newReply];
-        return comments.map((c) =>
-          c.id === parentId
-            ? { ...c, replies: [...(c.replies || []), newReply] }
-            : { ...c, replies: insertReply(c.replies || [], parentId, newReply) }
-        );
-      };
-
-      const updatedReplies = insertReply(currentReplies, parentId, newComment);
-
-      const { error: updateError } = await supabase
-        .from("posts")
-        .update({ replies: updatedReplies })
-        .eq("id", postId);
-
-      if (updateError) throw updateError;
-
-      // ✅ ローカルstateも更新
-      setPosts((prev) =>
-        prev.map((p) => (p.id === postId ? { ...p, replies: updatedReplies } : p))
-      );
-    } catch (err) {
-      console.error("❌ コメント追加失敗:", err.message);
-    }
-  };
-
-  /** ✅ リアクション更新（Supabase + ローカル両方反映） */
-  const toggleReaction = async (targetId, userId, type) => {
-    let optimisticValue = null;
-
-    setPosts((prev) =>
-      prev.map((item) => {
-        if (String(item.id) === String(targetId)) {
-          const arr = Array.isArray(item[type]) ? item[type] : [];
-          const already = arr.includes(userId);
-          optimisticValue = already ? arr.filter((id) => id !== userId) : [...arr, userId];
-          return { ...item, [type]: optimisticValue };
+    // アカウント作成直後の履歴クリア（1分以内）
+    if (savedAccount && localStorage.getItem("bakatter-recent")) {
+      const createdAt = savedAccount.createdAt ? new Date(savedAccount.createdAt) : null;
+      if (createdAt) {
+        const diffMinutes = (Date.now() - createdAt.getTime()) / 1000 / 60;
+        if (diffMinutes < 1) {
+          localStorage.removeItem("bakatter-recent");
         }
-        return item;
-      })
-    );
-
-    if (!optimisticValue) return null;
-
-    const { error } = await supabase
-      .from("posts")
-      .update({ [type]: optimisticValue })
-      .eq("id", targetId);
-
-    if (error) {
-      console.error("❌ Supabase update error:", error.message);
-      fetchPosts();
-    } else {
-      fetchPosts();
+      }
     }
 
-    return optimisticValue;
+    // ログイン時はローカル履歴
+    if (savedAccount) {
+      const stored = JSON.parse(localStorage.getItem("bakatter-recent") || "[]");
+      setRecentPosts(stored);
+      return;
+    }
+
+    // 未ログイン → 人気投稿
+    if (Array.isArray(posts) && posts.length > 0) {
+      const sorted = [...posts]
+        .sort((a, b) => {
+          const scoreA =
+            (Array.isArray(a.likes) ? a.likes.length : a.likes || 0) +
+            (Array.isArray(a.laughs) ? a.laughs.length : a.laughs || 0);
+
+          const scoreB =
+            (Array.isArray(b.likes) ? b.likes.length : b.likes || 0) +
+            (Array.isArray(b.laughs) ? b.laughs.length : b.laughs || 0);
+
+          if (scoreB !== scoreA) return scoreB - scoreA;
+
+          return new Date(b.createdAt || b.created_at || 0) -
+                 new Date(a.createdAt || a.created_at || 0);
+        })
+        .slice(0, 10);
+
+      setRecentPosts(sorted);
+    }
+  }, [posts]);
+
+  // -----------------------------
+  //  投稿クリック
+  // -----------------------------
+  const handleClick = (post) => {
+    if (!isLoggedIn) return openAuthModal();
+    navigate(`/post/${post.id}`);
   };
 
-  /** ✅ コメント・返信のリアクション更新 */
-  const toggleCommentReaction = async (postId, commentId, userId, type) => {
-    let optimisticReplies = null;
-    let updatedTarget = null;
+  // 履歴クリア
+  const handleClear = () => {
+    localStorage.removeItem("bakatter-recent");
+    setRecentPosts([]);
+  };
 
-    const updateReplies = (items = []) => {
-      let changed = false;
+  // -----------------------------
+  // URLプレビューの取得
+  // すでに DB に og_image があれば、それを最優先で使う！
+  // -----------------------------
+  useEffect(() => {
+    if (recentPosts.length === 0) return;
 
-      const updatedItems = items.map((item) => {
-        if (String(item.id) === String(commentId)) {
-          const arr = Array.isArray(item[type]) ? item[type] : [];
-          const already = arr.includes(userId);
-          const nextValue = already ? arr.filter((id) => id !== userId) : [...arr, userId];
-          changed = true;
-          updatedTarget = nextValue;
-          return {
-            ...item,
-            [type]: nextValue,
-          };
-        }
-
-        if (item.replies?.length) {
-          const { updated: nestedUpdated, changed: nestedChanged } = updateReplies(
-            item.replies
-          );
-          if (nestedChanged) {
-            changed = true;
-            return { ...item, replies: nestedUpdated };
+    const fetchUrlThumbnails = async () => {
+      for (const post of recentPosts) {
+        // ① すでに画像 or og_image があれば取得しない
+        if (
+          (Array.isArray(post.images) && post.images.length > 0) ||
+          post.image ||
+          post.og_image
+        ) {
+          if (post.og_image) {
+            setUrlThumbnails((prev) => ({
+              ...prev,
+              [post.id]: post.og_image,
+            }));
           }
+          continue;
         }
 
-        return item;
-      });
+        // ② URL 抽出
+        const urls = extractURLs(post.text || "");
+        if (urls.length === 0) continue;
 
-      return { updated: updatedItems, changed };
+        const url = urls[0];
+
+        // ③ Edge Function で情報取得
+        try {
+          const res = await fetch(
+            "https://nizcfjxngngqidgwzexc.supabase.co/functions/v1/url-preview",
+            {
+              method: "POST",
+              headers: {
+                "Content-Type": "application/json",
+                "Authorization": `Bearer ${import.meta.env.VITE_SUPABASE_ANON_KEY}`,
+                "apikey": import.meta.env.VITE_SUPABASE_ANON_KEY,
+              },
+              body: JSON.stringify({ url }),
+            }
+          );
+
+          const data = await res.json();
+
+          if (data.success && data.image) {
+            setUrlThumbnails((prev) => ({
+              ...prev,
+              [post.id]: data.image,
+            }));
+          }
+        } catch (err) {
+          console.log("URLメタ取得失敗:", err);
+        }
+      }
     };
 
-    setPosts((prev) =>
-      prev.map((post) => {
-        if (String(post.id) !== String(postId)) return post;
+    fetchUrlThumbnails();
+  }, [recentPosts]);
 
-        const { updated, changed } = updateReplies(post.replies || []);
-        if (!changed) return post;
-
-        optimisticReplies = updated;
-        return { ...post, replies: updated };
-      })
-    );
-
-    if (!optimisticReplies || !updatedTarget) return null;
-
-    const { error } = await supabase
-      .from("posts")
-      .update({ replies: optimisticReplies })
-      .eq("id", postId);
-
-    if (error) {
-      console.error("❌ コメントリアクション更新失敗:", error.message);
-      fetchPosts();
-    } else {
-      fetchPosts();
-    }
-
-    return updatedTarget;
-  };
-
-  /** 🗑 投稿削除 */
-  const deletePost = async (targetId) => {
-    await supabase.from("posts").delete().eq("id", targetId);
-    setPosts((prev) => prev.filter((p) => String(p.id) !== String(targetId)));
-  };
-
-  /** 🔹 コメント削除（ネスト対応） */
-  const deleteComment = async (postId, commentId) => {
-    try {
-      const { data } = await supabase.from("posts").select("replies").eq("id", postId).single();
-
-      if (!data) return;
-      const currentReplies = Array.isArray(data.replies) ? data.replies : [];
-
-      // 再帰的削除
-      const removeRecursive = (comments) =>
-        comments
-          .filter((c) => c.id !== commentId)
-          .map((c) => ({
-            ...c,
-            replies: removeRecursive(c.replies || []),
-          }));
-
-      const updatedReplies = removeRecursive(currentReplies);
-
-      // Supabase更新
-      const { error } = await supabase
-        .from("posts")
-        .update({ replies: updatedReplies })
-        .eq("id", postId);
-      if (error) throw error;
-
-      // State更新
-      setPosts((prev) =>
-        prev.map((p) => (p.id === postId ? { ...p, replies: updatedReplies } : p))
-      );
-    } catch (err) {
-      console.error("❌ コメント削除失敗:", err.message);
-    }
-  };
-
-  /** 🪶 投稿取得 */
-  const getPostById = (id) => posts.find((p) => String(p.id) === String(id));
-
-  /** 🚨 通報リスト保存 */
-  useEffect(() => {
-    localStorage.setItem("reported-items", JSON.stringify(reportedItems));
-  }, [reportedItems]);
+  // -----------------------------
+  //  描画
+  // -----------------------------
+  if (recentPosts.length === 0) return null;
 
   return (
-    <PostsContext.Provider
-      value={{
-        posts,
-        addPost,
-        addNestedComment,
-        toggleReaction,
-        toggleCommentReaction,
-        getPostById,
-        deletePost,
-        deleteComment, // 🔹 追加
-        fetchPosts,
-        reportedItems,
-        setReportedItems,
-      }}
-    >
-      {children}
-    </PostsContext.Provider>
-  );
-}
+    <aside className="
+      sticky top-16
+      mr-6 bg-[#F7F8F9] border border-[#DFE0E1]
+      rounded-2xl shadow-sm p-4 w-72 h-fit
+    ">
+      <div className="flex justify-between items-center mb-3">
+        <h2 className="text-sm font-semibold text-gray-700">
+          {isLoggedIn ? "最近の投稿" : "人気の投稿"}
+        </h2>
 
-export function usePosts() {
-  const context = useContext(PostsContext);
-  if (!context) throw new Error("usePosts must be used within a PostsProvider");
-  return context;
+        {isLoggedIn && (
+          <button
+            onClick={handleClear}
+            className="text-[#457BF5] text-sm font-medium hover:underline"
+          >
+            クリア
+          </button>
+        )}
+      </div>
+
+      <ul className="space-y-3">
+        {recentPosts.map((post) => {
+          const imageSrc =
+            (Array.isArray(post.images) && post.images[0]) ||
+            post.image ||
+            post.og_image ||
+            urlThumbnails[post.id] ||
+            null;
+
+          return (
+            <li
+              key={post.id}
+              onClick={() => handleClick(post)}
+              className="
+                flex items-center gap-3 p-2 rounded-lg
+                hover:bg-white hover:shadow-sm cursor-pointer
+                transition-all border border-transparent hover:border-[#E3E4E5]
+              "
+            >
+              {/* サムネイル */}
+              {imageSrc ? (
+                <img
+                  src={imageSrc}
+                  className="w-12 h-12 object-cover rounded-md border border-[#DFE0E1]"
+                  alt=""
+                  onError={(e) => (e.target.style.display = "none")}
+                />
+              ) : (
+                <div className="
+                  w-12 h-12 bg-white rounded-md flex items-center
+                  justify-center text-gray-400 text-sm border border-[#DFE0E1]
+                ">
+                  💬
+                </div>
+              )}
+
+              {/* テキスト */}
+              <div className="flex-1 min-w-0">
+                <p className="text-[13px] font-medium text-gray-800 truncate">
+                  {post.text?.slice(0, 28) || "本文なし"}
+                </p>
+
+                <div className="flex items-center justify-between text-xs text-gray-500 mt-0.5">
+                  <span className="truncate max-w-[90px]">
+                    {post.category || "未分類"}
+                  </span>
+                  <span className="truncate text-gray-400 ml-1">
+                    {post.username || post.user || `u_${post.userId || "unknown"}`}
+                  </span>
+                </div>
+              </div>
+            </li>
+          );
+        })}
+      </ul>
+    </aside>
+  );
 }
