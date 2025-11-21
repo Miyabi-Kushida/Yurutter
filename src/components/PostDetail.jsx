@@ -154,7 +154,7 @@ const userId = user?.id || null;   // ← これを使う
       },
       ...stored.filter((p) => p.id !== post.id),
     ].slice(0, 10);
-    localStorage.setItem(`bakatter-recent-${userId}`, JSON.stringify(updated));
+    localStorage.setItem(userId ? `bakatter-recent-${userId}` : "bakatter-recent", JSON.stringify(updated));
   }, [post]);
 
   // ✅ postが未取得時でもhooks順序を崩さず安全にreturn
