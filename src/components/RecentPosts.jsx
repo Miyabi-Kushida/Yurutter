@@ -24,8 +24,8 @@ export default function RecentPosts() {
 
   // ログインユーザーごとのキー
   const LS_KEY = userId
-    ? `bakatter-recent-${userId}`
-    : `bakatter-recent-guest`;
+  ? `bakatter-recent-${userId}`
+  : "bakatter-recent"; // ← guest はこれ！
 
   // ログイン → ユーザー固有の履歴を読む
   if (savedAccount) {
@@ -67,8 +67,15 @@ export default function RecentPosts() {
 
   // 履歴クリア
   const handleClear = () => {
-    localStorage.removeItem("bakatter-recent");
-    setRecentPosts([]);
+    const savedAccount = JSON.parse(localStorage.getItem("bakatter-account") || "null");
+const userId = savedAccount?.id;
+
+const LS_KEY = userId
+  ? `bakatter-recent-${userId}`
+  : "bakatter-recent";
+
+localStorage.removeItem(LS_KEY);
+setRecentPosts([]);
   };
 
   // -----------------------------
