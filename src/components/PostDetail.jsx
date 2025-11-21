@@ -15,11 +15,16 @@ import ImageCarousel from "./ImageCarousel";
 import CommentThread from "./CommentThread";
 import URLCard from "./URLCard";
 import { extractURLs, removeURLsFromText } from "../utils/url";
+import { useAuth } from "../context/AuthContext";
 
 export default function PostDetail() {
   const { postId } = useParams();
   const navigate = useNavigate();
   const { posts, addNestedComment, deletePost } = usePosts();
+
+  const { user } = useAuth();        // ← AuthContext からユーザー取得
+const userId = user?.id || null;   // ← これを使う
+
 
   // ✅ Hooksはすべてトップレベルに固定
   const [newComment, setNewComment] = useState("");
