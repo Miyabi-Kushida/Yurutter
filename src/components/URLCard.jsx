@@ -10,15 +10,16 @@ export default function URLCard({ url }) {
     const fetchMeta = async () => {
       try {
         const response = await fetch(
-          "https://nizcfjxngngqidgwzexc.supabase.co/functions/v1/url-preview",
-          {
-            method: "POST",
-            headers: {
-              "Content-Type": "application/json",
-            },
-            body: JSON.stringify({ url }),
-          }
-        );
+  "https://nizcfjxngngqidgwzexc.supabase.co/functions/v1/url-preview",
+  {
+    method: "POST",
+    headers: {
+      "Content-Type": "application/json",
+      "Authorization": `Bearer ${import.meta.env.VITE_SUPABASE_ANON_KEY}`,
+    },
+    body: JSON.stringify({ url }),
+  }
+);
 
         const data = await response.json();
         if (data.success) {
