@@ -5,6 +5,14 @@ import { usePosts } from "../context/PostsContext";
 import Header from "./Header";
 import LayoutContainer from "./LayoutContainer";
 import RecentPosts from "./RecentPosts";
+import { extractURLs } from "../utils/url"; // ← URL抽出関数が必要
+
+import { createClient } from "@supabase/supabase-js";
+
+const supabase = createClient(
+  import.meta.env.VITE_SUPABASE_URL,
+  import.meta.env.VITE_SUPABASE_ANON_KEY
+);
 
 export default function NewPost() {
   const navigate = useNavigate();
@@ -32,7 +40,9 @@ export default function NewPost() {
 
   const handleBack = () => navigate("/");
 
-  // 🖼 複数画像の選択・プレビュー
+  // --------------------------
+  // 画像アップロード・削除
+  // --------------------------
   const handleImageUpload = (e) => {
     if (!isLoggedIn) {
       e.preventDefault();
@@ -53,12 +63,13 @@ export default function NewPost() {
     Promise.all(readers).then((newImages) => setImages([...images, ...newImages]));
   };
 
-  // 🗑 個別削除
   const handleRemoveImage = (index) => {
     setImages(images.filter((_, i) => i !== index));
   };
 
-  // ✅ Supabaseへ投稿
+  // --------------------------
+  // 投稿処理
+  // --------------------------
   const handleSubmit = async (e) => {
     e.preventDefault();
     if (loading) return;
@@ -72,7 +83,9 @@ export default function NewPost() {
 
     let uploadedUrls = [];
 
-    // 🖼 Cloudinaryへ画像アップロード
+    // --------------------------
+    // Cloudinary に画像アップロード
+    // --------------------------
     try {
       if (images.length > 0) {
         uploadedUrls = await Promise.all(
@@ -96,28 +109,77 @@ export default function NewPost() {
       return;
     }
 
-    // 🧱 SupabaseへINSERT
+    // --------------------------
+    // Supabase に投稿を INSERT
+    // --------------------------
+    let newPost = null;
     try {
-      const newPost = await addPost({
+      newPost = await addPost({
         text: text.trim(),
         category,
         images: uploadedUrls,
       });
 
       if (!newPost) throw new Error("投稿に失敗しました。");
-
-      alert("投稿が完了しました！");
-      setText("");
-      setImages([]);
-      navigate("/", { state: { highlightId: newPost.id } });
     } catch (err) {
       console.error("❌ 投稿中エラー:", err);
       alert("投稿処理中にエラーが発生しました。");
-    } finally {
       setLoading(false);
+      return;
     }
+
+    // --------------------------
+    // 🟦 OGP 情報を取得 → Supabase に保存（高速化の心臓部）
+    // --------------------------
+    try {
+      const urls = extractURLs(text.trim());
+      if (urls.length > 0) {
+        const targetUrl = urls[0];
+
+        // Edge Function に問い合わせ
+        const res = await fetch(
+          `${import.meta.env.VITE_SUPABASE_URL}/functions/v1/url-preview`,
+          {
+            method: "POST",
+            headers: {
+              "Content-Type": "application/json",
+              "Authorization": `Bearer ${import.meta.env.VITE_SUPABASE_ANON_KEY}`,
+              "apikey": import.meta.env.VITE_SUPABASE_ANON_KEY,
+            },
+            body: JSON.stringify({ url: targetUrl }),
+          }
+        );
+
+        const og = await res.json();
+
+        // 成功したら Supabase に保存
+        if (og.success) {
+          await supabase
+            .from("posts")
+            .update({
+              og_title: og.title || null,
+              og_description: og.description || null,
+              og_image: og.image || null,
+            })
+            .eq("id", newPost.id);
+        }
+      }
+    } catch (err) {
+      console.error("OGP 保存エラー:", err);
+    }
+
+    alert("投稿が完了しました！");
+    setText("");
+    setImages([]);
+
+    navigate("/", { state: { highlightId: newPost.id } });
+
+    setLoading(false);
   };
 
+  // --------------------------
+  // UI
+  // --------------------------
   return (
     <div className="flex min-h-screen bg-white">
       <div className="flex flex-1 gap-8 w-full px-4 lg:px-8">
