@@ -1,12 +1,10 @@
 import { useEffect, useState } from "react";
 import { useNavigate } from "react-router-dom";
-import { extractURLs } from "../utils/url";
 import { usePosts } from "../context/PostsContext";
 import { useAuth } from "../context/AuthContext";
 
 export default function RecentPosts() {
   const [recentPosts, setRecentPosts] = useState([]);
-  const [urlThumbnails, setUrlThumbnails] = useState({});
   const [isLoggedIn, setIsLoggedIn] = useState(false);
 
   const navigate = useNavigate();
@@ -82,53 +80,6 @@ export default function RecentPosts() {
   };
 
   // -----------------------------
-  //  URLプレビュー（Supabase Edge Function）
-  // -----------------------------
-  useEffect(() => {
-    if (recentPosts.length === 0) return;
-
-    const fetchUrlThumbnails = async () => {
-      for (const post of recentPosts) {
-        // 画像が最初からあれば取得不要
-        if (post.image || (Array.isArray(post.images) && post.images.length > 0)) continue;
-
-        const urls = extractURLs(post.text || "");
-        if (urls.length === 0) continue;
-
-        const url = urls[0];
-
-        try {
-          const res = await fetch(
-  "https://nizcfjxngngqidgwzexc.supabase.co/functions/v1/url-preview",
-  {
-    method: "POST",
-    headers: {
-      "Content-Type": "application/json",
-      "Authorization": `Bearer ${import.meta.env.VITE_SUPABASE_ANON_KEY}`,
-      "apikey": import.meta.env.VITE_SUPABASE_ANON_KEY,
-    },
-    body: JSON.stringify({ url }),
-  }
-);
-
-          const data = await res.json();
-
-          if (data.success && data.image) {
-            setUrlThumbnails((prev) => ({
-              ...prev,
-              [post.id]: data.image,
-            }));
-          }
-        } catch (err) {
-          console.log("URLメタ取得失敗:", err);
-        }
-      }
-    };
-
-    fetchUrlThumbnails();
-  }, [recentPosts]);
-
-  // -----------------------------
   //  描画
   // -----------------------------
   if (recentPosts.length === 0) return null;
@@ -159,9 +110,9 @@ export default function RecentPosts() {
       <ul className="space-y-3">
         {recentPosts.map((post) => {
           const imageSrc =
+            post.og_image ||  // ← OGP画像が最優先！！
             (Array.isArray(post.images) && post.images[0]) ||
             post.image ||
-            urlThumbnails[post.id] ||
             null;
 
           return (
