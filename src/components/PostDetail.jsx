@@ -1,3 +1,4 @@
+
 // src/components/PostDetail.jsx
 import { useState, useEffect, useMemo } from "react";
 import { useParams, useNavigate } from "react-router-dom";
@@ -15,16 +16,11 @@ import ImageCarousel from "./ImageCarousel";
 import CommentThread from "./CommentThread";
 import URLCard from "./URLCard";
 import { extractURLs, removeURLsFromText } from "../utils/url";
-import { useAuth } from "../context/AuthContext";
 
 export default function PostDetail() {
   const { postId } = useParams();
   const navigate = useNavigate();
   const { posts, addNestedComment, deletePost } = usePosts();
-
-  const { user } = useAuth();        // ← AuthContext からユーザー取得
-const userId = user?.id || null;   // ← これを使う
-
 
   // ✅ Hooksはすべてトップレベルに固定
   const [newComment, setNewComment] = useState("");
@@ -154,7 +150,7 @@ const userId = user?.id || null;   // ← これを使う
       },
       ...stored.filter((p) => p.id !== post.id),
     ].slice(0, 10);
-    localStorage.setItem(userId ? `bakatter-recent-${userId}` : "bakatter-recent", JSON.stringify(updated));
+    localStorage.setItem("bakatter-recent", JSON.stringify(updated));
   }, [post]);
 
   // ✅ postが未取得時でもhooks順序を崩さず安全にreturn
