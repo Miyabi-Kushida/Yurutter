@@ -16,50 +16,46 @@ export default function RecentPosts() {
   // -----------------------------
   //  ログイン状態 & 履歴ロード
   // -----------------------------
-  useEffect(() => {
-    const savedAccount = JSON.parse(localStorage.getItem("bakatter-account") || "null");
-    setIsLoggedIn(!!savedAccount);
+    useEffect(() => {
+  const savedAccount = JSON.parse(localStorage.getItem("bakatter-account") || "null");
+  setIsLoggedIn(!!savedAccount);
 
-    // アカウント作成直後の履歴クリア（1分以内）
-    if (savedAccount && localStorage.getItem("bakatter-recent")) {
-      const createdAt = savedAccount.createdAt ? new Date(savedAccount.createdAt) : null;
-      if (createdAt) {
-        const diffMinutes = (Date.now() - createdAt.getTime()) / 1000 / 60;
-        if (diffMinutes < 1) {
-          localStorage.removeItem("bakatter-recent");
-        }
-      }
-    }
+  const userId = savedAccount?.id;
 
-    // ログイン時はローカル履歴
-    if (savedAccount) {
-      const stored = JSON.parse(localStorage.getItem("bakatter-recent") || "[]");
-      setRecentPosts(stored);
-      return;
-    }
+  // ログインユーザーごとのキー
+  const LS_KEY = userId
+    ? `bakatter-recent-${userId}`
+    : `bakatter-recent-guest`;
 
-    // 未ログイン → 人気投稿
-    if (Array.isArray(posts) && posts.length > 0) {
-      const sorted = [...posts]
-        .sort((a, b) => {
-          const scoreA =
-            (Array.isArray(a.likes) ? a.likes.length : a.likes || 0) +
-            (Array.isArray(a.laughs) ? a.laughs.length : a.laughs || 0);
+  // ログイン → ユーザー固有の履歴を読む
+  if (savedAccount) {
+    const stored = JSON.parse(localStorage.getItem(LS_KEY) || "[]");
+    setRecentPosts(stored);
+    return;
+  }
 
-          const scoreB =
-            (Array.isArray(b.likes) ? b.likes.length : b.likes || 0) +
-            (Array.isArray(b.laughs) ? b.laughs.length : b.laughs || 0);
+  // 未ログイン → 人気投稿
+  if (Array.isArray(posts) && posts.length > 0) {
+    const sorted = [...posts]
+      .sort((a, b) => {
+        const scoreA =
+          (Array.isArray(a.likes) ? a.likes.length : a.likes || 0) +
+          (Array.isArray(a.laughs) ? a.laughs.length : a.laughs || 0);
 
-          if (scoreB !== scoreA) return scoreB - scoreA;
+        const scoreB =
+          (Array.isArray(b.likes) ? b.likes.length : b.likes || 0) +
+          (Array.isArray(b.laughs) ? b.laughs.length : b.laughs || 0);
 
-          return new Date(b.createdAt || b.created_at || 0) -
-                 new Date(a.createdAt || a.created_at || 0);
-        })
-        .slice(0, 10);
+        if (scoreB !== scoreA) return scoreB - scoreA;
 
-      setRecentPosts(sorted);
-    }
-  }, [posts]);
+        return new Date(b.createdAt || b.created_at || 0) -
+               new Date(a.createdAt || a.created_at || 0);
+      })
+      .slice(0, 10);
+
+    setRecentPosts(sorted);
+  }
+}, [posts]);
 
   // -----------------------------
   //  投稿クリック
