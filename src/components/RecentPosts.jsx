@@ -1,12 +1,11 @@
+
 import { useEffect, useState } from "react";
 import { useNavigate } from "react-router-dom";
-import { extractURLs } from "../utils/url";
 import { usePosts } from "../context/PostsContext";
 import { useAuth } from "../context/AuthContext";
 
 export default function RecentPosts() {
   const [recentPosts, setRecentPosts] = useState([]);
-  const [urlThumbnails, setUrlThumbnails] = useState({});
   const [isLoggedIn, setIsLoggedIn] = useState(false);
 
   const navigate = useNavigate();
@@ -14,131 +13,72 @@ export default function RecentPosts() {
   const { openAuthModal } = useAuth();
 
   // -----------------------------
-  //  ログイン状態 & 履歴ロード
+  //  ログイン状態 & 履歴のロード
   // -----------------------------
-    useEffect(() => {
-  const savedAccount = JSON.parse(localStorage.getItem("bakatter-account") || "null");
-  setIsLoggedIn(!!savedAccount);
+  useEffect(() => {
+    const savedAccount = JSON.parse(localStorage.getItem("bakatter-account") || "null");
+    setIsLoggedIn(!!savedAccount);
 
-  const userId = savedAccount?.id;
+    // アカウント作成直後の履歴クリア（1分以内）
+    if (savedAccount && localStorage.getItem("bakatter-recent")) {
+      const createdAt = savedAccount.createdAt ? new Date(savedAccount.createdAt) : null;
+      if (createdAt) {
+        const diffMinutes = (Date.now() - createdAt.getTime()) / 1000 / 60;
+        if (diffMinutes < 1) {
+          localStorage.removeItem("bakatter-recent");
+        }
+      }
+    }
 
-  // ログインユーザーごとのキー
-  const LS_KEY = userId
-  ? `bakatter-recent-${userId}`
-  : "bakatter-recent"; // ← guest はこれ！
+    // ログインしてればローカル履歴
+    if (savedAccount) {
+      const stored = JSON.parse(localStorage.getItem("bakatter-recent") || "[]");
+      setRecentPosts(stored);
+      return;
+    }
 
-  // ログイン → ユーザー固有の履歴を読む
-  if (savedAccount) {
-    const stored = JSON.parse(localStorage.getItem(LS_KEY) || "[]");
-    setRecentPosts(stored);
-    return;
-  }
+    // 未ログインなら人気投稿
+    if (Array.isArray(posts) && posts.length > 0) {
+      const sorted = [...posts]
+        .sort((a, b) => {
+          const scoreA =
+            (Array.isArray(a.likes) ? a.likes.length : a.likes || 0) +
+            (Array.isArray(a.laughs) ? a.laughs.length : a.laughs || 0);
 
-  // 未ログイン → 人気投稿
-  if (Array.isArray(posts) && posts.length > 0) {
-    const sorted = [...posts]
-      .sort((a, b) => {
-        const scoreA =
-          (Array.isArray(a.likes) ? a.likes.length : a.likes || 0) +
-          (Array.isArray(a.laughs) ? a.laughs.length : a.laughs || 0);
+          const scoreB =
+            (Array.isArray(b.likes) ? b.likes.length : b.likes || 0) +
+            (Array.isArray(b.laughs) ? b.laughs.length : b.laughs || 0);
 
-        const scoreB =
-          (Array.isArray(b.likes) ? b.likes.length : b.likes || 0) +
-          (Array.isArray(b.laughs) ? b.laughs.length : b.laughs || 0);
+          if (scoreB !== scoreA) return scoreB - scoreA;
 
-        if (scoreB !== scoreA) return scoreB - scoreA;
+          const dateA = new Date(a.createdAt || 0);
+          const dateB = new Date(b.createdAt || 0);
+          return dateB - dateA;
+        })
+        .slice(0, 10);
 
-        return new Date(b.createdAt || b.created_at || 0) -
-               new Date(a.createdAt || a.created_at || 0);
-      })
-      .slice(0, 10);
-
-    setRecentPosts(sorted);
-  }
-}, [posts]);
+      setRecentPosts(sorted);
+    }
+  }, [posts]);
 
   // -----------------------------
   //  投稿クリック
   // -----------------------------
   const handleClick = (post) => {
-    if (!isLoggedIn) return openAuthModal();
+    if (!isLoggedIn) {
+      openAuthModal();
+      return;
+    }
     navigate(`/post/${post.id}`);
   };
 
-  // 履歴クリア
+  // -----------------------------
+  //  履歴クリア
+  // -----------------------------
   const handleClear = () => {
-    const savedAccount = JSON.parse(localStorage.getItem("bakatter-account") || "null");
-const userId = savedAccount?.id;
-
-const LS_KEY = userId
-  ? `bakatter-recent-${userId}`
-  : "bakatter-recent";
-
-localStorage.removeItem(LS_KEY);
-setRecentPosts([]);
+    localStorage.removeItem("bakatter-recent");
+    setRecentPosts([]);
   };
-
-  // -----------------------------
-  // URLプレビューの取得
-  // すでに DB に og_image があれば、それを最優先で使う！
-  // -----------------------------
-  useEffect(() => {
-    if (recentPosts.length === 0) return;
-
-    const fetchUrlThumbnails = async () => {
-      for (const post of recentPosts) {
-        // ① すでに画像 or og_image があれば取得しない
-        if (
-          (Array.isArray(post.images) && post.images.length > 0) ||
-          post.image ||
-          post.og_image
-        ) {
-          if (post.og_image) {
-            setUrlThumbnails((prev) => ({
-              ...prev,
-              [post.id]: post.og_image,
-            }));
-          }
-          continue;
-        }
-
-        // ② URL 抽出
-        const urls = extractURLs(post.text || "");
-        if (urls.length === 0) continue;
-
-        const url = urls[0];
-
-        // ③ Edge Function で情報取得
-        try {
-          const res = await fetch(
-            "https://nizcfjxngngqidgwzexc.supabase.co/functions/v1/url-preview",
-            {
-              method: "POST",
-              headers: {
-                "Content-Type": "application/json",
-                "Authorization": `Bearer ${import.meta.env.VITE_SUPABASE_ANON_KEY}`,
-                "apikey": import.meta.env.VITE_SUPABASE_ANON_KEY,
-              },
-              body: JSON.stringify({ url }),
-            }
-          );
-
-          const data = await res.json();
-
-          if (data.success && data.image) {
-            setUrlThumbnails((prev) => ({
-              ...prev,
-              [post.id]: data.image,
-            }));
-          }
-        } catch (err) {
-          console.log("URLメタ取得失敗:", err);
-        }
-      }
-    };
-
-    fetchUrlThumbnails();
-  }, [recentPosts]);
 
   // -----------------------------
   //  描画
@@ -146,11 +86,13 @@ setRecentPosts([]);
   if (recentPosts.length === 0) return null;
 
   return (
-    <aside className="
-      sticky top-16
-      mr-6 bg-[#F7F8F9] border border-[#DFE0E1]
-      rounded-2xl shadow-sm p-4 w-72 h-fit
-    ">
+    <aside
+      className="
+        sticky top-16
+        mr-6 bg-[#F7F8F9] border border-[#DFE0E1]
+        rounded-2xl shadow-sm p-4 w-72 h-fit
+      "
+    >
       <div className="flex justify-between items-center mb-3">
         <h2 className="text-sm font-semibold text-gray-700">
           {isLoggedIn ? "最近の投稿" : "人気の投稿"}
@@ -169,10 +111,9 @@ setRecentPosts([]);
       <ul className="space-y-3">
         {recentPosts.map((post) => {
           const imageSrc =
+            post.og_image ||  // ← OGP画像が最優先！！
             (Array.isArray(post.images) && post.images[0]) ||
             post.image ||
-            post.og_image ||
-            urlThumbnails[post.id] ||
             null;
 
           return (
@@ -189,15 +130,12 @@ setRecentPosts([]);
               {imageSrc ? (
                 <img
                   src={imageSrc}
-                  className="w-12 h-12 object-cover rounded-md border border-[#DFE0E1]"
                   alt=""
+                  className="w-12 h-12 object-cover rounded-md border border-[#DFE0E1]"
                   onError={(e) => (e.target.style.display = "none")}
                 />
               ) : (
-                <div className="
-                  w-12 h-12 bg-white rounded-md flex items-center
-                  justify-center text-gray-400 text-sm border border-[#DFE0E1]
-                ">
+                <div className="w-12 h-12 bg-white rounded-md flex items-center justify-center text-gray-400 text-sm border border-[#DFE0E1]">
                   💬
                 </div>
               )}
@@ -213,7 +151,9 @@ setRecentPosts([]);
                     {post.category || "未分類"}
                   </span>
                   <span className="truncate text-gray-400 ml-1">
-                    {post.username || post.user || `u_${post.userId || "unknown"}`}
+                    {post.username ||
+                      post.user ||
+                      `u_${post.userId || "unknown"}`}
                   </span>
                 </div>
               </div>
