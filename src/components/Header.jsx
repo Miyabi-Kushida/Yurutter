@@ -72,7 +72,7 @@ export default function Header() {
             className="flex items-center gap-2 cursor-pointer select-none mx-auto sm:mx-0"
           >
             <span className="text-2xl sm:text-2xl font-extrabold bg-gradient-to-r from-blue-500 via-indigo-500 to-purple-500 bg-clip-text text-transparent">
-              Yurutter
+              Bakatter 2.0
             </span>
           </div>
 
@@ -105,7 +105,7 @@ export default function Header() {
             <div className="relative w-full">
               <input
                 type="text"
-                placeholder="Yurutterを検索してください"
+                placeholder="Bakatterを検索してください"
                 value={query}
                 onChange={(e) => setQuery(e.target.value)}
                 onKeyDown={handleSearchKeyDown}
@@ -193,7 +193,7 @@ export default function Header() {
           <div className="relative">
             <input
               type="text"
-              placeholder="Yurutterを検索してください"
+              placeholder="Bakatterを検索してください"
               value={query}
               onChange={(e) => setQuery(e.target.value)}
               onKeyDown={handleSearchKeyDown}
