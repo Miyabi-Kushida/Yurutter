@@ -97,7 +97,7 @@ export default function AccountCreate() {
             className="bg-white p-6 sm:p-8 rounded-2xl shadow-card max-w-[640px] mx-auto space-y-8 text-center"
           >
             <h1 className="text-2xl sm:text-3xl font-bold bg-gradient-to-r from-brand to-purple-500 bg-clip-text text-transparent">
-              Yurutterへようこそ！
+              Bakatter 2.0へようこそ！
             </h1>
             <p className="text-gray-500 text-sm -mt-2">🎭 プロフィールを作成しよう</p>
 
