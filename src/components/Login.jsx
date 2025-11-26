@@ -76,7 +76,7 @@ export default function Login() {
         className="bg-white shadow-xl rounded-2xl p-8 w-[90%] max-w-sm text-center"
       >
         <h1 className="text-3xl font-extrabold mb-6 bg-gradient-to-r from-brand to-purple-500 bg-clip-text text-transparent">
-          Yurutter
+          Bakatter 2.0
         </h1>
 
         <form onSubmit={handleLogin} className="space-y-5">
